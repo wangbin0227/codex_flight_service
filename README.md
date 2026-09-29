@@ -10,7 +10,7 @@
 - 持久任务队列、幂等提交、用户隔离、重试、取消、进度事件、历史批次。
 - Codex CLI **0.158.0** + 自定义 MCP 浏览器工具 + Playwright **1.63.0**，无桌面端依赖。
 - 每票独立 Codex 会话、浏览器上下文和临时目录；默认全局并发 2，同航司并发 1。
-- 先尝试 track-trace，再查询官方入口；176 前缀带 e-SkyCargo 操作指引，不硬编码任何提单结果或 shipment ID。
+- 通过 track-trace 定位航司官方入口，依据当前页面自主完成查询；所有航司使用统一提示词，不硬编码提单结果或记录标识。
 - 返回原始时间，不转换时区；不把 ETA、收货、入库、签收时间当作 ATD/ATA。
 - 浏览器原文和可选截图形成带摘要与签名的证据，服务校验同票、同航段、原文、实际标签；冲突值不进入唯一时间汇总。
 - 任务与证据存在服务器，关闭网页不会中断查询。
@@ -26,6 +26,7 @@
 - [接口文档](docs/api.md) / [OpenAPI 3.1](docs/openapi.json)
 - [妙搭接入说明](docs/miaoda.md) / [服务端客户端示例](examples/miaoda-server.ts)
 - [架构、证据规则和运行边界](docs/architecture.md)
+- [查询提示词目标与业务规则](docs/prompt.md)
 - [交互式详细架构图（离线 HTML）](docs/architecture.html)：下载后用浏览器打开，包含系统总览、时序、状态机、证据校验、数据关系和部署拓扑。
 - [验证记录和验收步骤](docs/validation.md)
 - [Codex 输出 JSON Schema](docs/shipment.schema.json)
