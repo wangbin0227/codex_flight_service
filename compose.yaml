@@ -1,0 +1,78 @@
+name: codex-flight-service
+x-common: &common
+  image: codex-flight-service:local
+  build: .
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,nosuid,size=512m
+    - /home/node/.cache:rw,nosuid,size=128m,uid=1000,gid=1000
+  volumes:
+    - flight-data:/data
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  pids_limit: 512
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+services:
+  api:
+    <<: *common
+    command: [node, dist/src/main.js]
+    environment:
+      SERVICE_API_KEYS_FILE: /run/secrets/service_api_keys
+      MAX_QUEUED: ${MAX_QUEUED:-1000}
+      MAX_OWNER_QUEUED: ${MAX_OWNER_QUEUED:-200}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-2}
+      REQUESTS_PER_MINUTE: ${REQUESTS_PER_MINUTE:-120}
+    secrets: [service_api_keys]
+    ports: ["127.0.0.1:8080:8080"]
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+  worker:
+    <<: *common
+    command: [node, dist/src/worker-main.js]
+    environment:
+      CODEX_API_KEY_FILE: /run/secrets/model_api_key
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-astra}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-360}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-2}
+      BROWSER_ALLOWED_HOSTS: ${BROWSER_ALLOWED_HOSTS:-}
+    secrets: [model_api_key]
+    shm_size: 1gb
+    mem_limit: 4g
+    stop_grace_period: 15s
+    depends_on:
+      api: { condition: service_healthy }
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    profiles: [https]
+    environment:
+      SERVICE_DOMAIN: ${SERVICE_DOMAIN:-flight.example.com}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+secrets:
+  service_api_keys:
+    file: ./secrets/service-api-keys.json
+  model_api_key:
+    file: ./secrets/model-api-key.txt
+volumes:
+  flight-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,360 @@
+{
+  "type": "object",
+  "properties": {
+    "mawb": {
+      "type": "string",
+      "pattern": "^\\d{3}-\\d{8}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "not_found",
+        "blocked"
+      ]
+    },
+    "carrier": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 200
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "destination": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pieces": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "weight": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 200
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "journeyComplete": {
+      "type": "boolean"
+    },
+    "completionEvidenceId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "completionQuote": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 5000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,60}$"
+          },
+          "transportType": {
+            "type": "string",
+            "enum": [
+              "air",
+              "road"
+            ]
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flightNumber": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flightDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pieces": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actualDeparture": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "label": {
+                    "type": "string",
+                    "enum": [
+                      "ATD",
+                      "ATA",
+                      "DEP",
+                      "ARR",
+                      "Actual Departure",
+                      "Actual Arrival"
+                    ]
+                  },
+                  "evidenceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 5000
+                  }
+                },
+                "required": [
+                  "value",
+                  "label",
+                  "evidenceId",
+                  "quote"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actualArrival": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "label": {
+                    "type": "string",
+                    "enum": [
+                      "ATD",
+                      "ATA",
+                      "DEP",
+                      "ARR",
+                      "Actual Departure",
+                      "Actual Arrival"
+                    ]
+                  },
+                  "evidenceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 5000
+                  }
+                },
+                "required": [
+                  "value",
+                  "label",
+                  "evidenceId",
+                  "quote"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "transportType",
+          "group",
+          "origin",
+          "destination",
+          "flightNumber",
+          "flightDate",
+          "pieces",
+          "actualDeparture",
+          "actualArrival"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 1500
+          },
+          "segmentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "departure",
+              "arrival",
+              "general"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 10
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "segmentId",
+          "field",
+          "values"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "evidenceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "maxItems": 100
+    }
+  },
+  "required": [
+    "mawb",
+    "status",
+    "carrier",
+    "origin",
+    "destination",
+    "pieces",
+    "weight",
+    "journeyComplete",
+    "completionEvidenceId",
+    "completionQuote",
+    "segments",
+    "issues",
+    "evidenceIds"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2019-09/schema#"
+}
