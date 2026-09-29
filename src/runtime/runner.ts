@@ -24,7 +24,7 @@ export class CodexRunner implements Runner {
     const signingKey = randomBytes(32).toString('hex');
     const mcpPath = resolve(dirname(fileURLToPath(import.meta.url)), '../browser/mcp.js');
     const settings = { jobId: job.id, attempt: job.attempt, mawb: job.mawb, evidenceDir, signingKey,
-      allowedHosts: this.config.allowedHosts, resourceHosts: this.config.resourceHosts, executablePath: this.config.browserExecutable };
+      allowedHosts: this.config.allowedHosts, resourceHosts: this.config.resourceHosts, executablePath: this.config.browserExecutable, timeouts: this.config.timeouts };
     const toml = (value: string) => JSON.stringify(value);
     const provider = this.config.modelBaseUrl ? `model_provider = "flight_gateway"
 [model_providers.flight_gateway]
@@ -35,7 +35,7 @@ env_key = "CODEX_API_KEY"
 requires_openai_auth = false
 ` : '';
     await writeFile(join(home, 'config.toml'), `model = ${toml(this.config.model)}
-model_reasoning_effort = "low"
+model_reasoning_effort = ${toml(this.config.reasoningEffort)}
 approval_policy = "never"
 sandbox_mode = "read-only"
 web_search = "disabled"
@@ -54,8 +54,8 @@ computer_use = false
 command = ${toml(process.execPath)}
 args = [${toml(mcpPath)}]
 required = true
-startup_timeout_sec = 35
-tool_timeout_sec = 45
+startup_timeout_sec = ${this.config.timeouts.mcpStartupMs / 1000}
+tool_timeout_sec = ${this.config.timeouts.mcpToolMs / 1000}
 default_tools_approval_mode = "prompt"
 [mcp_servers.flight_browser.tools.browser_open]
 approval_mode = "approve"

@@ -9,10 +9,12 @@ import { DIRECTORY_URL } from '../src/domain.js';
 const config = readConfig(process.env, false);
 const cli = spawnSync(config.codexBin, ['--version'], { encoding: 'utf8', timeout: 10000 });
 const checks: Record<string, unknown> = { node: process.version, codex: cli.status === 0 ? cli.stdout.trim() : 'unavailable',
-  modelConfigured: Boolean(config.modelApiKey), provider: config.modelBaseUrl ? new URL(config.modelBaseUrl).origin : 'OpenAI default' };
+  modelConfigured: Boolean(config.modelApiKey), model: config.model, reasoningEffort: config.reasoningEffort,
+  jobTimeoutMs: config.jobTimeoutMs, timeouts: config.timeouts,
+  provider: config.modelBaseUrl ? new URL(config.modelBaseUrl).origin : 'OpenAI default' };
 const dir = await mkdtemp(join(tmpdir(), 'flight-doctor-'));
 const browser = new BrowserSession({ jobId: randomUUID(), attempt: 1, mawb: '176-00000000', evidenceDir: dir,
-  signingKey: 'doctor-only', allowedHosts: config.allowedHosts, resourceHosts: config.resourceHosts, executablePath: config.browserExecutable });
+  signingKey: 'doctor-only', allowedHosts: config.allowedHosts, resourceHosts: config.resourceHosts, executablePath: config.browserExecutable, timeouts: config.timeouts });
 try {
   await browser.start(); checks.browser = 'started';
   if (process.argv.includes('--network')) { const page = await browser.open(DIRECTORY_URL); checks.trackingDirectory = page.url; checks.evidenceCaptured = Boolean(page.evidenceId); }

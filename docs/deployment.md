@@ -64,10 +64,18 @@ sudo chmod 600 secrets/service-api-keys.json secrets/model-api-key.txt
 
 ```dotenv
 SERVICE_DOMAIN=flight.your-domain.com
-CODEX_MODEL=gpt-6-astra
+CODEX_MODEL=gpt-6-sol
+CODEX_REASONING_EFFORT=high
 CODEX_BASE_URL=https://your-authorized-gateway.example/v1
 WORKER_CONCURRENCY=2
-JOB_TIMEOUT_SECONDS=360
+JOB_TIMEOUT_SECONDS=600
+MCP_STARTUP_TIMEOUT_SECONDS=60
+MCP_TOOL_TIMEOUT_SECONDS=90
+BROWSER_LAUNCH_TIMEOUT_SECONDS=45
+BROWSER_NAVIGATION_TIMEOUT_SECONDS=45
+BROWSER_WAIT_TIMEOUT_SECONDS=30
+BROWSER_SNAPSHOT_TIMEOUT_SECONDS=20
+BROWSER_PROXY_IDLE_TIMEOUT_SECONDS=60
 MAX_ATTEMPTS=2
 MAX_QUEUED=1000
 MAX_OWNER_QUEUED=200
@@ -78,7 +86,31 @@ REQUESTS_PER_MINUTE=120
 - 自定义网关需要支持 Codex 使用的 Responses API、工具调用、流式结果和结构化输出。不能只用一次普通对话成功来判断兼容。
 - 模型必须在你的网关/账户中实际可用。这里沿用本项目需求指定的名称，不保证任何账户都有此模型。
 - 验证码流程需要模型和网关支持 MCP 图像输入。独立验证码资源域名可配置 `BROWSER_RESOURCE_HOSTS`，只开放实际需要的 iframe/图片资源；用法、重试预算和验收见 [captcha.md](captcha.md)。
+- `CODEX_REASONING_EFFORT` 默认 `high`，写入每票 Codex 会话的 `model_reasoning_effort`。其他强度需要当前模型与 CLI 支持。修改模型或推理强度后执行 `docker compose up -d --no-build worker` 重新创建 Worker；仅 `restart` 不会更新容器环境变量。
 - 全局并发在数据库层限制，同航司前缀最多一个运行任务；API 和 Worker 的超时相互独立。
+
+### 超时预算
+
+上述超时单位都是秒，可在 `.env` 修改，再执行 `docker compose up -d --no-build worker` 生效。原生部署需要启动命令显式加载 `.env`。
+
+| 配置 | 默认 | 范围及含义 |
+|---|---:|---|
+| `JOB_TIMEOUT_SECONDS` | 600 | 30–900；每次 Codex 执行上限，不包括排队和执行后的证据归档 |
+| `MCP_STARTUP_TIMEOUT_SECONDS` | 60 | 1–180；浏览器 MCP 初始化，至少比 Chromium 启动预算多 10 秒 |
+| `MCP_TOOL_TIMEOUT_SECONDS` | 90 | 1–300；一次工具调用，包括操作、可选结果等待和快照 |
+| `BROWSER_LAUNCH_TIMEOUT_SECONDS` | 45 | 1–120；Chromium 启动 |
+| `BROWSER_NAVIGATION_TIMEOUT_SECONDS` | 45 | 1–120；导航至 DOM 加载完成 |
+| `BROWSER_WAIT_TIMEOUT_SECONDS` | 30 | 1–120；指定结果/错误文字出现，或观察到的加载提示消失 |
+| `BROWSER_SNAPSHOT_TIMEOUT_SECONDS` | 20 | 1–60；整个快照，包括所有框架、可选截图与证据保存 |
+| `BROWSER_PROXY_IDLE_TIMEOUT_SECONDS` | 60 | 1–180；浏览器出站连接无数据活动的期限，不是整个请求耗时 |
+
+配置加载时检查：工具预算至少覆盖 `max(导航, 20 + 结果等待) + 快照 + 10` 秒；出站空闲期限不小于导航和结果等待预算。过小的组合会拒绝启动，避免内部步骤尚未结束就被外层截断。
+
+快照每个框架批量读取最多 360 个控件（含验证码区域），避免逐个跨进程访问。快照超时、MCP 请求取消，或工具执行达到外层预算前 5 秒时，会关闭浏览器和代理并作废引用，阻止残留操作和并行调用污染结果。该会话关闭后不能继续操作；需要新的任务尝试。
+
+点击/Enter 可带 `waitFor: { text, state: "visible" | "hidden" }`。提交后必须等待并核实结果/错误；DOM 加载完成、加载提示消失和空白快照都不等于查询成功或无记录。`browser_wait` 也支持这两种状态。
+
+HTTP 接口、Nginx、任务租约和停机宽限的超时保持独立，不随浏览器预算一起增加。
 
 ## 5. 构建并启动
 
@@ -108,6 +140,22 @@ docker compose exec api node dist/scripts/smoke.js 176-65598013
 ```
 
 该脚本创建真实任务，持续读取进度，输出最终汇总与详情；会消耗模型额度。失败时退出码非零。`partial` 只有 ATD 和 ATA 均存在时才通过此脚本的基本验收，**仍需检查航段与冲突说明**。
+
+脚本按观测到的批次状态分别累计排队和执行等待时间，默认各 30 分钟。可通过脚本环境变量 `FLIGHT_QUEUE_TIMEOUT_SECONDS` / `FLIGHT_POLL_TIMEOUT_SECONDS` 调整；重试等待计入排队预算。网络短暂中断会继续轮询同一批次。客户端到期仅停止等待，不取消后台任务。
+
+恢复已提交批次（保持相同服务凭证和用户身份，不会再次提单）：
+
+```bash
+docker compose exec -e FLIGHT_BATCH_ID=已有批次UUID api node dist/scripts/smoke.js
+```
+
+服务端排队没有自动过期期限，600 秒从每次执行开始计算。批量任务应按票数和并发设置客户端预算，并保留 batchId 供恢复查询。
+
+浏览器本地回归（不调用模型或外部航司）：
+
+```bash
+docker compose exec worker node dist/tests/browser.integration.js
+```
 
 验收要求：
 

@@ -6,7 +6,7 @@ export function buildPrompt(mawb: string): string {
 1. 必须首先 browser_open https://www.track-trace.com/aircargo。输入当前提单查询，或找到对应航司入口并进入。
 2. 入口未给出记录时，去对应航司官网完成表单查询。允许点击、输入、提交查询、展开详情、等待动态内容；不能只说无法提交表单。
 3. 对 176 前缀：阿联酋航空 e-SkyCargo 公开入口 https://eskycargo.emirates.com/app/offerandorder/#/home/find-offer 。Search & Track 的 Doc.No. 输入连续 11 位号码，必要时 Enter 形成标签，再点击 Search，打开 Tracking Details。不要猜测任何 shipment ID。
-4. 使用最新 snapshot 的 ref；页面可能在返回时仍加载中，等待相关结果文字或重新读取。快照截断时使用 browser_read_more。必要时截图辅助阅读。
+4. 使用最新 snapshot 的 ref。提交查询时，若已知具体的结果/错误文字，用 browser_click 或 browser_press 的 waitFor 等待其 visible；若已观察到加载提示，可等待该提示 hidden。否则提交后用 browser_wait 等待相关结果文字。DOM 加载完成或加载提示消失不代表查询成功；必须再次核实当前提单的结果表格或明确无记录/错误提示，不能把空白或仍在加载判为无记录。快照截断时使用 browser_read_more。必要时截图辅助阅读。
 5. 核对完整提单号属于当前查询，读取所有航段、拆批和公路转运。不能把实际查询过一票的资料用于另一票。
 6. 每个时间引用 browser 工具实际返回的 evidenceId。quote 必须是该次页面文本的连续原文，可仅合并空白；必须包含航班号、起止机场、实际标签、完整原始日期时间。value 保留原始时间表达，不做时区换算，不改写日期格式。
 7. 若时间的日期与时分分开显示，value 可用连续原文的日期加时分（只合并空白）；不能补出未出现的年份。无法形成证据则留 null 并说明。

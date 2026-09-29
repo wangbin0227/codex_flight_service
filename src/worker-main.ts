@@ -6,5 +6,6 @@ const config = readConfig(process.env, false);
 if (!config.modelApiKey) throw new Error('CODEX_API_KEY or CODEX_API_KEY_FILE is required for a worker.');
 const store = new Store(config), worker = new Worker(store, new CodexRunner(config));
 process.on('SIGTERM', () => worker.stop()); process.on('SIGINT', () => worker.stop());
-console.log(JSON.stringify({ event: 'worker_started', concurrency: config.concurrency, model: config.model }));
+console.log(JSON.stringify({ event: 'worker_started', concurrency: config.concurrency, model: config.model, reasoningEffort: config.reasoningEffort,
+  jobTimeoutMs: config.jobTimeoutMs, timeouts: config.timeouts }));
 await worker.run(); store.close();

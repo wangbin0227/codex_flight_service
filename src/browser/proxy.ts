@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { connect } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import ipaddr from 'ipaddr.js';
+import { DEFAULT_TIMEOUTS } from '../timeouts.js';
 
 export function isPublicAddress(address: string): boolean {
   try {
@@ -23,7 +24,7 @@ export function assertUrl(value: string, allow: string[]): URL {
 }
 // Every Chromium network connection uses this proxy. DNS is resolved and checked before
 // connecting to a pinned address; redirects and subresources cannot reach ECS metadata or LANs.
-export async function startProxy(allow: string[]): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
+export async function startProxy(allow: string[], idleTimeoutMs = DEFAULT_TIMEOUTS.proxyIdleMs): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
   const sockets = new Set<import('node:net').Socket>();
   const server = createServer((_req, res) => { res.writeHead(403); res.end('HTTPS only'); });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
@@ -42,7 +43,7 @@ export async function startProxy(allow: string[]): Promise<{ server: Server; url
       if (client.destroyed) return;
       upstream = connect({ host: address.address, port: 443, family: address.family });
       sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream!));
-      upstream.setTimeout(30_000, () => upstream?.destroy());
+      upstream.setTimeout(idleTimeoutMs, () => { upstream?.destroy(); client.destroy(); });
       upstream.on('error', () => client.destroy());
       upstream.on('connect', () => {
         if (client.destroyed) { upstream?.destroy(); return; }

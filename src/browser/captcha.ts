@@ -118,7 +118,14 @@ export class CaptchaController {
 }
 
 export async function describeElement(locator: Locator): Promise<ElementInfo> {
-  return locator.evaluate(el => {
+  return (await locator.evaluate(describeElementsInPage))[0]!.description;
+}
+
+// Self-contained page function shared by batch discovery and action-time checks.
+// Preserve locator ordering (including shadow DOM) so returned indexes remain actionable.
+export function describeElementsInPage(input: Element | Element[]) {
+  const elements = Array.isArray(input) ? input : [input];
+  return elements.slice(0, 360).map((el, index) => {
     const attributes = (node: Element) => ['id', 'class', 'name', 'alt', 'title', 'aria-label', 'placeholder', 'src']
       .map(a => node.getAttribute(a) ?? '').join(' ').slice(0, 1800);
     let context = '', parent = el.parentElement;
@@ -127,8 +134,12 @@ export async function describeElement(locator: Locator): Promise<ElementInfo> {
     if (form?.querySelector('input[type=password],input[autocomplete=one-time-code]')) context += ' password';
     const label = el.getAttribute('aria-label') || el.getAttribute('placeholder')
       || (el instanceof HTMLInputElement ? [...(el.labels ?? [])].map(l => l.textContent).join(' ') : '') || el.textContent?.trim().slice(0, 140) || '';
-    return { tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') ?? '').toLowerCase(), label,
+    const description: ElementInfo = { tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') ?? '').toLowerCase(), label: label.slice(0, 140),
       identity: attributes(el), context, autocomplete: el.getAttribute('autocomplete') ?? '' };
+    const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+    return { index, description, href: el.getAttribute('href'),
+      value: el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el.value : '',
+      visible: style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0 };
   });
 }
 
