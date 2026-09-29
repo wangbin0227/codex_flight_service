@@ -23,6 +23,7 @@
 - [接口文档](docs/api.md) / [OpenAPI 3.1](docs/openapi.json)
 - [妙搭接入说明](docs/miaoda.md) / [服务端客户端示例](examples/miaoda-server.ts)
 - [架构、证据规则和运行边界](docs/architecture.md)
+- [交互式详细架构图（离线 HTML）](docs/architecture.html)：下载后用浏览器打开，包含系统总览、时序、状态机、证据校验、数据关系和部署拓扑。
 - [验证记录和验收步骤](docs/validation.md)
 - [Codex 输出 JSON Schema](docs/shipment.schema.json)
 
