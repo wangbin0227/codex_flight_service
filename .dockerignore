@@ -8,3 +8,4 @@ dist
 *.sqlite*
 *.log
 /backups
+/browsers

@@ -20,6 +20,7 @@
 ## 文档
 
 - [阿里云部署与升级](docs/deployment.md)
+- [不使用 Docker：原生 systemd 部署](docs/deployment-native.md)，默认串行查询，附低内存试运行配置。
 - [接口文档](docs/api.md) / [OpenAPI 3.1](docs/openapi.json)
 - [妙搭接入说明](docs/miaoda.md) / [服务端客户端示例](examples/miaoda-server.ts)
 - [架构、证据规则和运行边界](docs/architecture.md)
@@ -72,7 +73,9 @@ node --env-file=.env dist/scripts/smoke.js 176-65598013
 
 ## 生产部署
 
-使用 `compose.yaml`，详见 [部署文档](docs/deployment.md)。项目将任务与队列一起存入 SQLite WAL，适用于**一台 ECS、本地持久磁盘**，不需要额外 Redis/PostgreSQL。多 Worker 在同台机器共用数据库时也通过事务和租约限流；不要把 SQLite 文件放在 OSSFS/NFS，也不要直接跨 ECS 共享数据库。扩展到多机时应替换 Store 为 PostgreSQL/独立队列。
+可以选择 [Docker Compose](docs/deployment.md)，或 [直接安装到服务器、由 systemd 管理](docs/deployment-native.md)。原生方案提供专用账号、凭证注入、持久数据目录和默认并发 1 的配置；不需要 Docker。去掉 Docker 仍不能保证 1GB 服务器稳定运行，Chromium 与查询进程的峰值内存需要实测。
+
+项目将任务与队列一起存入 SQLite WAL，适用于**一台 ECS、本地持久磁盘**，不需要额外 Redis/PostgreSQL。多 Worker 在同台机器共用数据库时也通过事务和租约限流；不要把 SQLite 文件放在 OSSFS/NFS，也不要直接跨 ECS 共享数据库。扩展到多机时应替换 Store 为 PostgreSQL/独立队列。
 
 仓库内的 CLI、浏览器和依赖已锁定。Docker 镜像使用自己的 CLI，不会读取或覆盖宿主机已有的 Codex 配置；原生部署可用 `CODEX_BIN` 指定已安装的 CLI，但须重新执行兼容性和真实查询验收。
 

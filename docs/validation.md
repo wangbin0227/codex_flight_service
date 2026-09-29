@@ -41,3 +41,5 @@ docker compose exec api node dist/scripts/smoke.js 176-65598013
 GitHub Actions 在 Node 24 上运行类型检查、自动化测试、构建和生成文档一致性检查，再构建 Linux Docker 镜像并验证镜像内 Chromium/MCP 依赖能启动。CI 不含模型 Key，也不调用真实提单查询。
 
 本地开发机没有 Docker Engine，因此 Linux 镜像验证交给 CI/目标服务器；不能把本地 TypeScript 构建通过描述成阿里云已经部署成功。
+
+新增的 native job 在 Ubuntu 24.04 上直接安装 systemd API/Worker，验证重复安装保留配置、凭证注入、实际 HTTP 接口，以及受限 Worker 环境内的 Chromium 启动。它使用 CI 假凭证并只提交 invalid_input，不执行模型调用。此检查不能代替 1GB 阿里云真实提单查询与内存峰值验收；以对应提交的 GitHub Actions 结果确认是否通过。

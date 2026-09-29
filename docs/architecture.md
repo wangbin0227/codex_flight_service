@@ -24,6 +24,12 @@ flowchart LR
 
 第一版部署目标是一台 ECS。SQLite 的事务、WAL 和任务租约足以支持小规模并发，避免先引入 Redis、PostgreSQL 和额外运维。API、Worker 都是独立进程，共享本地持久卷。单机多个 Worker 的领取仍由数据库事务串行保护。高吞吐或多机部署需替换 Store，实现同样的接口和租约语义。
 
+## 两种运行方式
+
+相同业务代码可以通过 Docker Compose 或原生 systemd 运行。原生配置见 [deployment-native.md](deployment-native.md)：两个服务使用专用账号，数据存放在 `/var/lib/codex-flight-service/data`，密钥由 `LoadCredential` 注入对应服务，默认并发 1。systemd 配置在 `deploy/native/`，安装脚本为 `scripts/install-native.sh`。
+
+原生方案省去容器管理开销，但不消除 Codex、Node 和 Chromium 的内存开销，也不具备等同容器的隔离边界。1GB 服务器仍需真实验收；默认资源上限不代表实际占用或成功率保证。
+
 ## 状态与恢复
 
 - 新任务 `queued`；事务领取后 `running`，attempt 加一，绑定唯一 workerId 和 30 秒租约。

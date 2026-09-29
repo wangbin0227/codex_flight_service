@@ -1,5 +1,7 @@
 # 阿里云 ECS 部署
 
+本页为 Docker Compose 路径。**不使用 Docker 时，请按 [原生 systemd 部署](deployment-native.md) 操作**；两者使用同一套 API 和 Worker 代码，原生配置默认并发 1。
+
 ## 1. 环境与部署范围
 
 推荐首版使用 Ubuntu 24.04 / Debian 12、x86_64 ECS，**4 vCPU / 8 GB RAM / 40 GB 以上磁盘**，并发从 2 开始。这是容量起点，不是压测保证。需要 Docker Engine 和 Compose v2，可从 Docker 官方源安装。
