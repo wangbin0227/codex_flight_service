@@ -5,22 +5,30 @@ import { join } from 'node:path';
 import { DIRECTORY_URL, type Evidence } from '../domain.js';
 import { signEvidence } from '../evidence.js';
 import { assertUrl, startProxy } from './proxy.js';
-import { CAPTCHA_SELECTOR, CaptchaController, captchaRole, describeElement, type CaptchaAction } from './captcha.js';
+import { CAPTCHA_SELECTOR, CaptchaController, captchaRole, describeElementsInPage, type CaptchaAction } from './captcha.js';
+import { DEFAULT_TIMEOUTS, type Timeouts } from '../timeouts.js';
+
+const CONTROL_SELECTOR = `input:not([type=hidden]),button,a,select,textarea,[role=button],[role=combobox],${CAPTCHA_SELECTOR}`;
+export interface WaitCondition { text: string; state?: 'visible' | 'hidden' }
 
 export interface BrowserSettings {
   jobId: string; attempt: number; mawb: string; evidenceDir: string; signingKey: string;
-  allowedHosts: string[]; resourceHosts?: string[]; executablePath?: string;
+  allowedHosts: string[]; resourceHosts?: string[]; executablePath?: string; timeouts?: Timeouts;
 }
 export class BrowserSession {
   private browser?: Browser; private context?: BrowserContext; private page?: Page;
   private proxy?: Awaited<ReturnType<typeof startProxy>>;
   private refs = new Map<string, Locator>(); private sequence = 0; private operations = 0;
   private captcha = new CaptchaController();
+  private busy = false; private closed = false; private closing?: Promise<void>;
+  private get timeouts() { return this.settings.timeouts ?? DEFAULT_TIMEOUTS; }
+  get isClosed() { return this.closed; }
   constructor(readonly settings: BrowserSettings) {}
   async start() {
     const networkHosts = [...this.settings.allowedHosts, ...(this.settings.resourceHosts ?? [])];
-    this.proxy = await startProxy(networkHosts);
+    this.proxy = await startProxy(networkHosts, this.timeouts.proxyIdleMs);
     this.browser = await chromium.launch({ headless: true, executablePath: this.settings.executablePath,
+      timeout: this.timeouts.browserLaunchMs,
       proxy: { server: this.proxy.url }, args: ['--disable-quic', '--proxy-bypass-list=<-loopback>'],
       env: { PATH: process.env.PATH ?? '', ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}) },
     });
@@ -28,7 +36,6 @@ export class BrowserSession {
     await this.context.route('**/*', async route => {
       try {
         const req = route.request();
-        // Provider hosts may serve challenge frames/assets, but never become a top-level destination.
         const topLevel = req.isNavigationRequest() && req.frame().parentFrame() === null;
         assertUrl(req.url(), topLevel ? this.settings.allowedHosts : networkHosts);
         await route.continue();
@@ -41,8 +48,31 @@ export class BrowserSession {
     await mkdir(this.settings.evidenceDir, { recursive: true, mode: 0o700 });
   }
   private current(): Page {
+    this.assertActive();
     if (!this.page || ++this.operations > 80) throw new Error('Browser operation budget exhausted.');
     return this.page;
+  }
+  private assertActive() { if (this.closed) throw new Error('Browser session closed after cancellation or timeout.'); }
+  private async deadline<T>(ms: number, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    this.assertActive();
+    let timer: NodeJS.Timeout | undefined;
+    let cancel: () => void = () => {};
+    const expired = new Promise<never>((_, reject) => {
+      const stop = (message: string) => { void this.close(); reject(new Error(message)); };
+      cancel = () => stop('Browser session closed after cancellation.');
+      timer = setTimeout(() => stop(`Timeout ${ms}ms exceeded; browser session closed.`), ms);
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
+    });
+    try {
+      return await Promise.race([expired, Promise.resolve().then(() => { this.assertActive(); return operation(); })]);
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel); }
+  }
+  async runTool<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (this.busy) throw new Error('Browser operation already in progress; wait before retrying.');
+    this.busy = true;
+    try { return await this.deadline(this.timeouts.mcpToolMs - 5000, operation, signal); }
+    finally { this.busy = false; }
   }
   async open(url: string) {
     this.captcha.reset(); this.refs.clear();
@@ -53,63 +83,78 @@ export class BrowserSession {
       capturedAt: new Date().toISOString(), url, text, kind: 'navigation_attempt',
       sha256: createHash('sha256').update(text).digest('hex'), screenshot: false, sequence: ++this.sequence };
     await this.save(attempt);
-    await this.current().goto(url, { waitUntil: 'domcontentloaded', timeout: 25_000 });
+    await this.current().goto(url, { waitUntil: 'domcontentloaded', timeout: this.timeouts.navigationMs });
     return this.snapshot();
   }
   private async save(evidence: Evidence) {
+    this.assertActive();
     await writeFile(join(this.settings.evidenceDir, `${evidence.id}.json`), JSON.stringify({ evidence, signature: signEvidence(evidence, this.settings.signingKey) }), { mode: 0o600 });
   }
   async snapshot(screenshot = false) {
+    return this.deadline(this.timeouts.snapshotMs, () => this.capture(screenshot));
+  }
+  private async capture(screenshot: boolean) {
     const page = this.current();
     if (page.url() === 'about:blank') throw new Error('Open the tracking directory first.');
     assertUrl(page.url(), this.settings.allowedHosts);
     this.refs.clear(); this.captcha.reset();
-    let text = '', controls = '';
+    let text = '', controls = '', title = '';
+    const refs = new Map<string, Locator>();
     for (const [frameIndex, frame] of page.frames().entries()) {
+      this.assertActive();
       try {
-        const body = await frame.locator('body').innerText({ timeout: 3000 });
-        text += `\n[Frame ${frameIndex}]\n${body.slice(0, 300000)}`;
-        const locators = await frame.locator(`input:not([type=hidden]),button,a,select,textarea,[role=button],[role=combobox],${CAPTCHA_SELECTOR}`).all();
-        for (let i = 0; i < Math.min(locators.length, 360); i++) {
-          const locator = locators[i]!;
-          if (!await locator.isVisible().catch(() => false)) continue;
-          const description = await describeElement(locator);
+        // Two batch reads per frame, preserving Playwright's shadow-DOM locator order.
+        const data = await frame.locator('body').evaluate(body => ({
+          text: (body as HTMLElement).innerText.slice(0, 300000), title: body.ownerDocument.title,
+        }), undefined, { timeout: 3000 });
+        this.assertActive();
+        const elements = await frame.locator(CONTROL_SELECTOR).evaluateAll(describeElementsInPage);
+        this.assertActive();
+        if (frame === page.mainFrame()) title = data.title;
+        text += `\n[Frame ${frameIndex}]\n${data.text}`;
+        for (const { index, description, href, value, visible } of elements) {
+          if (!visible) continue;
           const role = captchaRole(description);
           if (!role && ['img', 'canvas', 'iframe'].includes(description.tag)) continue;
-          const info = await locator.evaluate(el => ({
-            href: el.getAttribute('href'), value: el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el.value : '' }));
-          const ref = `${this.sequence + 1}-${frameIndex}-${i}`;
-          this.refs.set(ref, locator);
+          const ref = `${this.sequence + 1}-${frameIndex}-${index}`;
+          const locator = frame.locator(CONTROL_SELECTOR).nth(index);
+          refs.set(ref, locator);
           if (role) this.captcha.add(ref, locator, frameIndex, role);
           controls += `\n[${ref}] ${JSON.stringify({ tag: description.tag, type: description.type, label: description.label,
-            ...info, ...(role ? { captcha: role } : {}) })}`;
+            href, value, ...(role ? { captcha: role } : {}) })}`;
         }
-      } catch { /* An inaccessible ad frame must not discard the shipment page. */ }
+      } catch (error) {
+        this.assertActive();
+        // A missing main document must not look like a successful empty shipment page.
+        if (frame === page.mainFrame()) throw error;
+      }
     }
-    text = `${await page.title()}\n${text}\nINTERACTIVE ELEMENTS (current input values included):${controls}`.slice(0, 490000);
+    this.assertActive();
+    text = `${title}\n${text}\nINTERACTIVE ELEMENTS (current input values included):${controls}`.slice(0, 490000);
     const evidence: Evidence = { id: randomUUID(), jobId: this.settings.jobId, attempt: this.settings.attempt,
       capturedAt: new Date().toISOString(), url: page.url(), text, sha256: createHash('sha256').update(text).digest('hex'),
       screenshot: false, sequence: ++this.sequence, kind: 'page' };
     let image: Buffer | undefined;
     if (screenshot) {
       image = await page.screenshot({ fullPage: false, timeout: 5000 });
+      this.assertActive();
       await writeFile(join(this.settings.evidenceDir, `${evidence.id}.png`), image, { mode: 0o600 });
       evidence.screenshot = true;
     }
     await this.save(evidence);
+    this.assertActive(); this.refs = refs;
     return { evidenceId: evidence.id, url: evidence.url, text: text.slice(0, 65000), truncated: text.length > 65000, image };
   }
   private ref(id: string) { const locator = this.refs.get(id); if (!locator) throw new Error('Stale element reference. Read a new snapshot.'); return locator; }
-  async click(ref: string) {
-    this.current();
-    this.captcha.reset();
+  async click(ref: string, waitFor?: WaitCondition) {
+    this.current(); this.captcha.reset();
     await this.ref(ref).click({ timeout: 10_000 });
-    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => undefined);
+    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+    if (waitFor) await this.waitForCondition(waitFor);
     return this.snapshot();
   }
   async fill(ref: string, value: string) {
-    this.current();
-    this.captcha.reset();
+    this.current(); this.captcha.reset();
     const digits = this.settings.mawb.replace('-', '');
     if (![this.settings.mawb, digits, digits.slice(0, 3), digits.slice(3)].includes(value)) {
       throw new Error('Only the current AWB or its prefix/number may be entered.');
@@ -117,19 +162,25 @@ export class BrowserSession {
     await this.ref(ref).fill(value, { timeout: 5000 });
     return this.snapshot();
   }
-  async press(ref: string, key: string) {
-    this.current();
-    this.captcha.reset();
+  async press(ref: string, key: string, waitFor?: WaitCondition) {
+    this.current(); this.captcha.reset();
     if (!['Enter', 'Tab', 'ArrowDown', 'Escape'].includes(key)) throw new Error('Unsupported key');
-    await this.ref(ref).press(key, { timeout: 5000 }); return this.snapshot();
+    await this.ref(ref).press(key, { timeout: 5000 });
+    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+    if (waitFor) await this.waitForCondition(waitFor);
+    return this.snapshot();
   }
   async select(ref: string, value: string) {
     this.current(); this.captcha.reset(); await this.ref(ref).selectOption(value, { timeout: 5000 }); return this.snapshot();
   }
-  async wait(text: string) {
-    const page = this.current();
-    this.captcha.reset();
-    await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible', timeout: 15_000 });
+  private async waitForCondition(condition: WaitCondition) {
+    const page = this.current(); this.captcha.reset();
+    const matches = page.getByText(condition.text, { exact: false });
+    // Filtering visible matches also handles duplicated hidden templates.
+    await matches.filter({ visible: true }).first().waitFor({ state: condition.state ?? 'visible', timeout: this.timeouts.waitMs });
+  }
+  async wait(text: string, state: 'visible' | 'hidden' = 'visible') {
+    await this.waitForCondition({ text, state });
     return this.snapshot();
   }
   async read(start: number) {
@@ -143,6 +194,7 @@ export class BrowserSession {
     const page = this.current();
     assertUrl(page.url(), this.settings.allowedHosts);
     const capture = await this.captcha.inspect(page, ref);
+    this.assertActive();
     const { image, ...metadata } = capture;
     const text = `CAPTCHA inspection only; not shipment evidence. ${JSON.stringify(metadata)} Image SHA256: ${createHash('sha256').update(image).digest('hex')}`;
     const evidence: Evidence = { id: randomUUID(), jobId: this.settings.jobId, attempt: this.settings.attempt,
@@ -158,9 +210,8 @@ export class BrowserSession {
     await this.captcha.act(page, challengeId, action);
     return this.snapshot(true);
   }
-  async close() {
-    await this.context?.close().catch(() => undefined);
-    await this.browser?.close().catch(() => undefined);
-    await this.proxy?.close().catch(() => undefined);
+  close(): Promise<void> {
+    this.closed = true; this.refs.clear(); this.captcha.reset();
+    return this.closing ??= Promise.allSettled([this.browser?.close(), this.proxy?.close()]).then(() => {});
   }
 }

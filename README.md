@@ -48,7 +48,8 @@ npm run browser:install
 ```dotenv
 SERVICE_API_KEYS_FILE=./secrets/service-api-keys.json
 CODEX_API_KEY_FILE=./secrets/model-api-key.txt
-CODEX_MODEL=gpt-6-astra
+CODEX_MODEL=gpt-6-sol
+CODEX_REASONING_EFFORT=high
 # 自定义 Responses 网关按实际填写；留空使用默认 OpenAI provider。
 CODEX_BASE_URL=
 DATA_DIR=./runtime
@@ -72,6 +73,8 @@ node --env-file=.env dist/scripts/smoke.js 176-65598013
 ```
 
 `doctor` 验证二进制、浏览器启动和可选目录连通；它不验证模型认证、航司查询成功或所有工具兼容。`smoke` 才经过 API → 队列 → Codex → 浏览器 → 校验 → 结果全链路。
+
+默认每次执行 600 秒；工具 90 秒、浏览器导航 45 秒、动态结果等待 30 秒、整体快照 20 秒。主要超时可通过环境变量修改，预算关系见[部署文档](docs/deployment.md#超时预算)。`smoke` 分别给排队和执行各 30 分钟，支持通过 `FLIGHT_BATCH_ID` 恢复轮询。
 
 ## 生产部署
 

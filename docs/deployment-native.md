@@ -104,10 +104,11 @@ sudoedit /etc/codex-flight-service/worker.env
 模型 Key 文件只写 Key 本身。`worker.env` 示例：
 
 ```dotenv
-CODEX_MODEL=gpt-6-astra
+CODEX_MODEL=gpt-6-sol
+CODEX_REASONING_EFFORT=high
 CODEX_BASE_URL=https://your-authorized-gateway.example/v1
 WORKER_CONCURRENCY=1
-JOB_TIMEOUT_SECONDS=360
+JOB_TIMEOUT_SECONDS=600
 MAX_ATTEMPTS=2
 BROWSER_ALLOWED_HOSTS=
 ```

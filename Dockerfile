@@ -19,7 +19,10 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/docs ./docs
 COPY package.json ./
-RUN node node_modules/playwright/cli.js install --with-deps chromium --only-shell \
+# Codex uses the OS trust store; Node's bundled CAs do not cover the CLI.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && node node_modules/playwright/cli.js install --with-deps chromium --only-shell \
     && mkdir -p /data /home/node/.cache \
     && chown -R node:node /data /home/node \
     && chmod -R a+rX /ms-playwright \
