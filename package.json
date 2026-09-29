@@ -1,0 +1,35 @@
+{
+  "name": "codex-flight-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <27"
+  },
+  "scripts": {
+    "build": "tsc && node dist/scripts/export-schema.js",
+    "dev": "node --import tsx src/main.ts",
+    "start": "node dist/src/main.js",
+    "worker": "node dist/src/worker-main.js",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run build",
+    "doctor": "node --import tsx scripts/doctor.ts",
+    "smoke": "node --import tsx scripts/smoke.ts",
+    "browser:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "@openai/codex": "0.158.0",
+    "fastify": "5.12.5",
+    "ipaddr.js": "2.3.0",
+    "playwright": "1.63.0",
+    "zod": "3.25.76",
+    "zod-to-json-schema": "3.25.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

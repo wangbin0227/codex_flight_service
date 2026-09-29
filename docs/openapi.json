@@ -1,0 +1,2551 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Codex Flight Service",
+    "version": "0.1.0",
+    "description": "空运提单异步查询。所有业务请求须由可信服务端发送服务密钥与 X-User-Id。"
+  },
+  "servers": [
+    {
+      "url": "https://flight.example.com"
+    }
+  ],
+  "security": [
+    {
+      "ServiceToken": [],
+      "UserId": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ServiceToken": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "UserId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-User-Id"
+      }
+    },
+    "schemas": {
+      "ModelShipment": {
+        "type": "object",
+        "properties": {
+          "mawb": {
+            "type": "string",
+            "pattern": "^\\d{3}-\\d{8}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "not_found",
+              "blocked"
+            ]
+          },
+          "carrier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pieces": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "journeyComplete": {
+            "type": "boolean"
+          },
+          "completionEvidenceId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completionQuote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]{1,60}$"
+                },
+                "transportType": {
+                  "type": "string",
+                  "enum": [
+                    "air",
+                    "road"
+                  ]
+                },
+                "group": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "origin": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "destination": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "flightNumber": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "flightDate": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "pieces": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actualDeparture": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "ATD",
+                            "ATA",
+                            "DEP",
+                            "ARR",
+                            "Actual Departure",
+                            "Actual Arrival"
+                          ]
+                        },
+                        "evidenceId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "quote": {
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label",
+                        "evidenceId",
+                        "quote"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actualArrival": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "ATD",
+                            "ATA",
+                            "DEP",
+                            "ARR",
+                            "Actual Departure",
+                            "Actual Arrival"
+                          ]
+                        },
+                        "evidenceId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "quote": {
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label",
+                        "evidenceId",
+                        "quote"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "transportType",
+                "group",
+                "origin",
+                "destination",
+                "flightNumber",
+                "flightDate",
+                "pieces",
+                "actualDeparture",
+                "actualArrival"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1500
+                },
+                "segmentId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "departure",
+                    "arrival",
+                    "general"
+                  ]
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "maxItems": 10
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "segmentId",
+                "field",
+                "values"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "mawb",
+          "status",
+          "carrier",
+          "origin",
+          "destination",
+          "pieces",
+          "weight",
+          "journeyComplete",
+          "completionEvidenceId",
+          "completionQuote",
+          "segments",
+          "issues",
+          "evidenceIds"
+        ],
+        "additionalProperties": false,
+        "$schema": "https://json-schema.org/draft/2019-09/schema#"
+      },
+      "Shipment": {
+        "type": "object",
+        "properties": {
+          "mawb": {
+            "type": "string",
+            "pattern": "^\\d{3}-\\d{8}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "not_found",
+              "blocked"
+            ]
+          },
+          "carrier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pieces": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "journeyComplete": {
+            "type": "boolean"
+          },
+          "completionEvidenceId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completionQuote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]{1,60}$"
+                },
+                "transportType": {
+                  "type": "string",
+                  "enum": [
+                    "air",
+                    "road"
+                  ]
+                },
+                "group": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "origin": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "destination": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z]{3}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "flightNumber": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "flightDate": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "pieces": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actualDeparture": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "ATD",
+                            "ATA",
+                            "DEP",
+                            "ARR",
+                            "Actual Departure",
+                            "Actual Arrival"
+                          ]
+                        },
+                        "evidenceId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "quote": {
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label",
+                        "evidenceId",
+                        "quote"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actualArrival": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "ATD",
+                            "ATA",
+                            "DEP",
+                            "ARR",
+                            "Actual Departure",
+                            "Actual Arrival"
+                          ]
+                        },
+                        "evidenceId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "quote": {
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label",
+                        "evidenceId",
+                        "quote"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "transportType",
+                "group",
+                "origin",
+                "destination",
+                "flightNumber",
+                "flightDate",
+                "pieces",
+                "actualDeparture",
+                "actualArrival"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 1500
+                },
+                "segmentId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "departure",
+                    "arrival",
+                    "general"
+                  ]
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "maxItems": 10
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "segmentId",
+                "field",
+                "values"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 100
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "atd": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "value",
+                      "missing",
+                      "multiple",
+                      "conflict"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value",
+                  "kind",
+                  "note"
+                ],
+                "additionalProperties": false
+              },
+              "ata": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "value",
+                      "missing",
+                      "multiple",
+                      "conflict"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value",
+                  "kind",
+                  "note"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "atd",
+              "ata"
+            ],
+            "additionalProperties": false
+          },
+          "checkedAt": {
+            "type": "string"
+          },
+          "sourceUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "mawb",
+          "status",
+          "carrier",
+          "origin",
+          "destination",
+          "pieces",
+          "weight",
+          "journeyComplete",
+          "completionEvidenceId",
+          "completionQuote",
+          "segments",
+          "issues",
+          "evidenceIds",
+          "summary",
+          "checkedAt",
+          "sourceUrls"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mawb": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "partial",
+              "not_found",
+              "blocked",
+              "failed",
+              "cancelled",
+              "invalid_input"
+            ]
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "type": "integer"
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mawb": {
+                    "type": "string",
+                    "pattern": "^\\d{3}-\\d{8}$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "complete",
+                      "partial",
+                      "not_found",
+                      "blocked"
+                    ]
+                  },
+                  "carrier": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "origin": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "destination": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z]{3}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pieces": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "weight": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "journeyComplete": {
+                    "type": "boolean"
+                  },
+                  "completionEvidenceId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "completionQuote": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 5000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "segments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z0-9_-]{1,60}$"
+                        },
+                        "transportType": {
+                          "type": "string",
+                          "enum": [
+                            "air",
+                            "road"
+                          ]
+                        },
+                        "group": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "origin": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "destination": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "flightNumber": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "flightDate": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "pieces": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "actualDeparture": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ATD",
+                                    "ATA",
+                                    "DEP",
+                                    "ARR",
+                                    "Actual Departure",
+                                    "Actual Arrival"
+                                  ]
+                                },
+                                "evidenceId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "quote": {
+                                  "type": "string",
+                                  "minLength": 10,
+                                  "maxLength": 5000
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "label",
+                                "evidenceId",
+                                "quote"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "actualArrival": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ATD",
+                                    "ATA",
+                                    "DEP",
+                                    "ARR",
+                                    "Actual Departure",
+                                    "Actual Arrival"
+                                  ]
+                                },
+                                "evidenceId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "quote": {
+                                  "type": "string",
+                                  "minLength": 10,
+                                  "maxLength": 5000
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "label",
+                                "evidenceId",
+                                "quote"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "transportType",
+                        "group",
+                        "origin",
+                        "destination",
+                        "flightNumber",
+                        "flightDate",
+                        "pieces",
+                        "actualDeparture",
+                        "actualArrival"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 100
+                  },
+                  "issues": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "message": {
+                          "type": "string",
+                          "maxLength": 1500
+                        },
+                        "segmentId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 60
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "field": {
+                          "type": "string",
+                          "enum": [
+                            "departure",
+                            "arrival",
+                            "general"
+                          ]
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "maxItems": 10
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "segmentId",
+                        "field",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 100
+                  },
+                  "evidenceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 100
+                  },
+                  "summary": {
+                    "type": "object",
+                    "properties": {
+                      "atd": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "value",
+                              "missing",
+                              "multiple",
+                              "conflict"
+                            ]
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "kind",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "ata": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "value",
+                              "missing",
+                              "multiple",
+                              "conflict"
+                            ]
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "kind",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "atd",
+                      "ata"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "checkedAt": {
+                    "type": "string"
+                  },
+                  "sourceUrls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "mawb",
+                  "status",
+                  "carrier",
+                  "origin",
+                  "destination",
+                  "pieces",
+                  "weight",
+                  "journeyComplete",
+                  "completionEvidenceId",
+                  "completionQuote",
+                  "segments",
+                  "issues",
+                  "evidenceIds",
+                  "summary",
+                  "checkedAt",
+                  "sourceUrls"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "batchId",
+          "mawb",
+          "status",
+          "attempt",
+          "maxAttempts",
+          "cancelRequested",
+          "stage",
+          "result",
+          "errorCode",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Batch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "duplicates": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "finished": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "finished"
+            ]
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "batchId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "mawb": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "succeeded",
+                    "partial",
+                    "not_found",
+                    "blocked",
+                    "failed",
+                    "cancelled",
+                    "invalid_input"
+                  ]
+                },
+                "attempt": {
+                  "type": "integer"
+                },
+                "maxAttempts": {
+                  "type": "integer"
+                },
+                "cancelRequested": {
+                  "type": "boolean"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "result": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "mawb": {
+                          "type": "string",
+                          "pattern": "^\\d{3}-\\d{8}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "complete",
+                            "partial",
+                            "not_found",
+                            "blocked"
+                          ]
+                        },
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "origin": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "destination": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "pieces": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "weight": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "journeyComplete": {
+                          "type": "boolean"
+                        },
+                        "completionEvidenceId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "completionQuote": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 5000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "segments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-zA-Z0-9_-]{1,60}$"
+                              },
+                              "transportType": {
+                                "type": "string",
+                                "enum": [
+                                  "air",
+                                  "road"
+                                ]
+                              },
+                              "group": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "origin": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "destination": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[A-Z]{3}$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "flightNumber": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "flightDate": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "pieces": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "actualDeparture": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ATD",
+                                          "ATA",
+                                          "DEP",
+                                          "ARR",
+                                          "Actual Departure",
+                                          "Actual Arrival"
+                                        ]
+                                      },
+                                      "evidenceId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "quote": {
+                                        "type": "string",
+                                        "minLength": 10,
+                                        "maxLength": 5000
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "label",
+                                      "evidenceId",
+                                      "quote"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "actualArrival": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ATD",
+                                          "ATA",
+                                          "DEP",
+                                          "ARR",
+                                          "Actual Departure",
+                                          "Actual Arrival"
+                                        ]
+                                      },
+                                      "evidenceId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "quote": {
+                                        "type": "string",
+                                        "minLength": 10,
+                                        "maxLength": 5000
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "label",
+                                      "evidenceId",
+                                      "quote"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "transportType",
+                              "group",
+                              "origin",
+                              "destination",
+                              "flightNumber",
+                              "flightDate",
+                              "pieces",
+                              "actualDeparture",
+                              "actualArrival"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 100
+                        },
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "message": {
+                                "type": "string",
+                                "maxLength": 1500
+                              },
+                              "segmentId": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 60
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "field": {
+                                "type": "string",
+                                "enum": [
+                                  "departure",
+                                  "arrival",
+                                  "general"
+                                ]
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "maxItems": 10
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message",
+                              "segmentId",
+                              "field",
+                              "values"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 100
+                        },
+                        "evidenceIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "maxItems": 100
+                        },
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "atd": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "value",
+                                    "missing",
+                                    "multiple",
+                                    "conflict"
+                                  ]
+                                },
+                                "note": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "kind",
+                                "note"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "ata": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "value",
+                                    "missing",
+                                    "multiple",
+                                    "conflict"
+                                  ]
+                                },
+                                "note": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "kind",
+                                "note"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "atd",
+                            "ata"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "checkedAt": {
+                          "type": "string"
+                        },
+                        "sourceUrls": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "mawb",
+                        "status",
+                        "carrier",
+                        "origin",
+                        "destination",
+                        "pieces",
+                        "weight",
+                        "journeyComplete",
+                        "completionEvidenceId",
+                        "completionQuote",
+                        "segments",
+                        "issues",
+                        "evidenceIds",
+                        "summary",
+                        "checkedAt",
+                        "sourceUrls"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "errorCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "batchId",
+                "mawb",
+                "status",
+                "attempt",
+                "maxAttempts",
+                "cancelRequested",
+                "stage",
+                "result",
+                "errorCode",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "duplicates",
+          "total",
+          "finished",
+          "status",
+          "jobs"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "requestId"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "进程存活检查",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "存活",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "检查最近 30 秒有无 Worker 心跳",
+        "responses": {
+          "200": {
+            "description": "就绪",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "没有活跃 Worker",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "本接口规范",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/batches": {
+      "post": {
+        "summary": "提交批量查询",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "mawbs"
+                ],
+                "properties": {
+                  "mawbs": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 15000
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 120
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "mawbs": [
+                  "176-65598013"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "相同幂等请求",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "新批次",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "幂等键冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "队列已满或限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "列出当前用户历史批次",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "批次列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/batches/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "批次",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询批次进度及逐票结果"
+      }
+    },
+    "/v1/batches/{id}/cancel": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "取消排队与执行中的任务；已完成结果保留"
+      }
+    },
+    "/v1/jobs/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "单票结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询单票结果"
+      }
+    },
+    "/v1/jobs/{id}/retry": {
+      "post": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "已排队",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态不可重试或执行次数已达上限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "重查失败、不完整或已取消任务"
+      }
+    },
+    "/v1/jobs/{id}/events": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "读取脱敏业务事件"
+      }
+    },
+    "/v1/jobs/{id}/evidence": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "列出当前或指定执行次数的证据"
+      }
+    },
+    "/v1/jobs/{id}/evidence/{evidenceId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "读取原文与来源"
+      }
+    },
+    "/v1/jobs/{id}/evidence/{evidenceId}/screenshot": {
+      "get": {
+        "summary": "读取证据截图",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG 截图",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "没有截图或无权限",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

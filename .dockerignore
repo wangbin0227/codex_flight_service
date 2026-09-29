@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+/runtime
+/secrets
+.env
+.env.*
+*.sqlite*
+*.log
+/backups
