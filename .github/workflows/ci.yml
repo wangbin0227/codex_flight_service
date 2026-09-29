@@ -20,6 +20,8 @@ jobs:
         run: docker build -t codex-flight-service:ci .
       - name: Verify browser in deployment image
         run: docker run --rm --init --shm-size=1g codex-flight-service:ci node dist/scripts/doctor.js
+      - name: Verify CAPTCHA browser fixtures in deployment image
+        run: docker run --rm --init --shm-size=1g codex-flight-service:ci node dist/scripts/check-captcha.js
   native:
     runs-on: ubuntu-24.04
     steps:

@@ -14,9 +14,11 @@ test('runner uses fixed schema, isolated config and preapproved bounded tools wi
 const fs=require('node:fs'), path=require('node:path');
 const args=process.argv.slice(2), config=fs.readFileSync(path.join(process.env.CODEX_HOME,'config.toml'),'utf8');
 if(process.env.SERVICE_API_KEYS || process.env.FLIGHT_SERVICE_KEY || !config.includes('shell_tool = false') || !config.includes('approval_mode = "approve"') || !args.includes('--output-schema')) process.exit(4);
+for(const tool of ['browser_captcha_inspect','browser_captcha_act']) if(!config.includes('[mcp_servers.flight_browser.tools.'+tool+']\\napproval_mode = "approve"')) process.exit(6);
 let prompt='';process.stdin.on('data',x=>prompt+=x);process.stdin.on('end',()=>{
  if(!prompt.includes('176-12345678') || prompt.includes('not-a-real-model-key')) process.exit(5);
  console.log(JSON.stringify({type:'item.started',item:{type:'mcp_tool_call',tool:'browser_open'}}));
+ console.log(JSON.stringify({type:'item.started',item:{type:'mcp_tool_call',tool:'browser_captcha_inspect'}}));
  fs.writeFileSync(args[args.indexOf('-o')+1],JSON.stringify({mawb:'176-12345678',status:'blocked'}));
 });
 `, { mode: 0o700 });
@@ -25,6 +27,7 @@ let prompt='';process.stdin.on('data',x=>prompt+=x);process.stdin.on('end',()=>{
     const stages: string[] = [];
     const result = await new CodexRunner(f.config).run(job, new AbortController().signal, stage => stages.push(stage));
     assert.equal((result.raw as any).mawb, job.mawb); assert.ok(stages.length);
+    assert.ok(stages.includes('正在识别并处理官网验证码'));
     assert.deepEqual(await readdir(join(f.config.dataDir, 'runs', job.id)), []);
   } finally { store.close(); f.cleanup(); }
 });

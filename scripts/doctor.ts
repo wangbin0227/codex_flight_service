@@ -12,7 +12,7 @@ const checks: Record<string, unknown> = { node: process.version, codex: cli.stat
   modelConfigured: Boolean(config.modelApiKey), provider: config.modelBaseUrl ? new URL(config.modelBaseUrl).origin : 'OpenAI default' };
 const dir = await mkdtemp(join(tmpdir(), 'flight-doctor-'));
 const browser = new BrowserSession({ jobId: randomUUID(), attempt: 1, mawb: '176-00000000', evidenceDir: dir,
-  signingKey: 'doctor-only', allowedHosts: config.allowedHosts, executablePath: config.browserExecutable });
+  signingKey: 'doctor-only', allowedHosts: config.allowedHosts, resourceHosts: config.resourceHosts, executablePath: config.browserExecutable });
 try {
   await browser.start(); checks.browser = 'started';
   if (process.argv.includes('--network')) { const page = await browser.open(DIRECTORY_URL); checks.trackingDirectory = page.url; checks.evidenceCaptured = Boolean(page.evidenceId); }

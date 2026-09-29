@@ -28,12 +28,14 @@ cat > /run/systemd/system/codex-flight-worker.service.d/ci-doctor.conf <<EOF
 Type=oneshot
 ExecStart=
 ExecStart=$flight_node dist/scripts/doctor.js
+ExecStart=$flight_node dist/scripts/check-captcha.js
 Restart=no
 TimeoutStartSec=90
 EOF
 systemctl daemon-reload
 systemctl start codex-flight-worker
 journalctl -u codex-flight-worker --no-pager -o cat | grep -F '"browser": "started"'
+journalctl -u codex-flight-worker --no-pager -o cat | grep -F 'CAPTCHA browser fixtures passed'
 rm /run/systemd/system/codex-flight-worker.service.d/ci-doctor.conf
 systemctl daemon-reload
 systemctl start codex-flight-api codex-flight-worker

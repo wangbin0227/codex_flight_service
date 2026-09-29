@@ -8,7 +8,7 @@ export const evidenceSchema = z.object({
   id: z.string().uuid(), jobId: z.string().uuid(), attempt: z.number().int().positive(),
   url: z.string().url(), capturedAt: z.string().datetime(), text: z.string().max(500000),
   sha256: z.string().regex(/^[a-f0-9]{64}$/), screenshot: z.boolean(), sequence: z.number().int().positive(),
-  kind: z.enum(['page', 'navigation_attempt']),
+  kind: z.enum(['page', 'navigation_attempt', 'captcha']),
 });
 export function signEvidence(evidence: Evidence, key: string): string {
   // Schema parsing may reorder object keys. Sign a canonical representation.
@@ -111,7 +111,7 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
     result.status = result.journeyComplete && air.length > 0 && air.every(s => s.actualDeparture && s.actualArrival)
       && atd.kind === 'value' && ata.kind === 'value' ? 'complete' : 'partial';
   } else if (result.status === 'not_found') {
-    const proven = evidence.some(e => !isDirectory(e.url) && hasMawb(e.text, mawb)
+    const proven = evidence.some(e => e.kind === 'page' && !isDirectory(e.url) && hasMawb(e.text, mawb)
       && /no (?:records?|results?|shipments?)|not found|暂无记录|未找到/i.test(e.text));
     if (!proven) { result.status = 'blocked'; result.issues.push({ code: 'unverified_absence', message: '未取得官网明确无记录的证据。', segmentId: null, field: 'general', values: [] }); }
   } else result.status = 'blocked';

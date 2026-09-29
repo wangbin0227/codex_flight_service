@@ -84,7 +84,7 @@ X-User-Id: <可信服务端识别的登录用户 ID>
 | succeeded | 空运段实际时间和全程完成信息齐全 |
 | partial | 有部分信息、拆批或时间冲突；可能已有首页所需的两项时间 |
 | not_found | 官网有对应提单明确无记录的证据 |
-| blocked | 验证码、登录、访问限制、无有效证据或结果校验受阻 |
+| blocked | 验证码自动处理未通过、登录、访问限制、无有效证据或结果校验受阻 |
 | failed | 超时、进程或协议失败，已用完本轮重试预算 |
 | cancelled | 用户取消 |
 | invalid_input | 提单格式不正确，未执行查询 |
@@ -157,6 +157,8 @@ kind 为 `value / missing / multiple / conflict`。value 仅在唯一可核实�
 
 field 为 departure/arrival/general；segmentId 可为 null。不要把所有 partial 都显示成“查不到”。
 
+验证码失败使用 `captcha_unsolved`（尝试未通过/预算用尽）、`captcha_unsupported`（控件无法识别或操作）、`captcha_unavailable`（图片/资源加载失败）。不需要前端回传验证码答案；后端在有上限的自动尝试后返回结果。详见 [captcha.md](captcha.md)。
+
 ## 取消和重查
 
 - `POST /v1/batches/{id}/cancel`：返回最新批次。排队任务立即取消，运行任务异步终止；重复取消可安全调用，已完成结果保留。
@@ -177,7 +179,7 @@ field 为 departure/arrival/general；segmentId 可为 null。不要把所有 pa
 - `GET /v1/jobs/{id}/evidence/{evidenceId}?attempt=1`：返回完整证据对象，包括 text。
 - `GET /v1/jobs/{id}/evidence/{evidenceId}/screenshot?attempt=1`：有截图则返回 image/png，无截图返回 404。
 
-`navigation_attempt` 仅是访问尝试，`page` 才是实际读取的页面。textUrl/screenshotUrl 是相对路径，仍需带鉴权头。妙搭应由服务端代理读取，不把凭证拼到 URL。
+`navigation_attempt` 仅是访问尝试，`page` 才是实际读取的页面。新增 `captcha` 是验证码局部截图和元数据，仅用于诊断，不能作为运输时间或无记录证据。textUrl/screenshotUrl 是相对路径，仍需带鉴权头。妙搭应由服务端代理读取，不把凭证拼到 URL。
 
 运行期间证据正在任务隔离目录采集，结束或超时后发布到证据 API；不要将执行中暂时为空理解为“没有访问网页”。
 

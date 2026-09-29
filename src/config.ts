@@ -14,7 +14,7 @@ export interface Config {
   concurrency: number; jobTimeoutMs: number; leaseMs: number; maxAttempts: number;
   maxQueued: number; maxOwnerQueued: number; requestLimit: number;
   codexBin: string; model: string; modelApiKey: string; modelBaseUrl?: string;
-  allowedHosts: string[]; browserExecutable?: string;
+  allowedHosts: string[]; resourceHosts: string[]; browserExecutable?: string;
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys = true): Config {
   const secret = (name: string): string => env[`${name}_FILE`]
@@ -34,7 +34,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys 
     }
   }
   const hosts = (env.BROWSER_ALLOWED_HOSTS?.trim() ? env.BROWSER_ALLOWED_HOSTS.split(',') : DEFAULT_HOSTS).map(h => h.trim().toLowerCase());
-  if (hosts.some(h => !/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(h))) throw new Error('Invalid browser host allowlist.');
+  const resourceHosts = (env.BROWSER_RESOURCE_HOSTS ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+  if ([...hosts, ...resourceHosts].some(h => !/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(h))) throw new Error('Invalid browser host allowlist.');
   return {
     dataDir: resolve(env.DATA_DIR ?? './runtime'), host: env.HOST ?? '127.0.0.1',
     port: integer(8080, 1, 65535).parse(env.PORT), apiKeys,
@@ -46,6 +47,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys 
     requestLimit: integer(120, 10, 1000).parse(env.REQUESTS_PER_MINUTE),
     codexBin: env.CODEX_BIN ? (env.CODEX_BIN.includes('/') ? resolve(env.CODEX_BIN) : env.CODEX_BIN) : resolve('node_modules/.bin/codex'),
     model: env.CODEX_MODEL ?? 'gpt-6-astra', modelApiKey: secret('CODEX_API_KEY'),
-    modelBaseUrl: base, allowedHosts: hosts, browserExecutable: env.BROWSER_EXECUTABLE_PATH,
+    modelBaseUrl: base, allowedHosts: hosts, resourceHosts, browserExecutable: env.BROWSER_EXECUTABLE_PATH,
   };
 }
