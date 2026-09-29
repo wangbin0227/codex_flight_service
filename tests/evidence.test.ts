@@ -12,6 +12,26 @@ test('verified actual times produce summary while preserving source format', () 
   assert.equal(result.status, 'complete'); assert.equal(result.summary.atd.value, '01 Sep 2026 10:00');
   assert.equal(result.summary.ata.value, '01 Sep 2026 15:00');
 });
+test('explicit Chinese actual labels map to ATD/ATA without translating source quotes', () => {
+  const f = verifiedFixture();
+  const old = f.result.segments[0]!.actualDeparture!.quote;
+  const quote = old.replace('ATD', '实际起飞').replace('ATA', '实际到达');
+  f.page.text = f.page.text.replace(old, quote);
+  f.result.segments[0]!.actualDeparture!.quote = quote;
+  f.result.segments[0]!.actualArrival!.quote = quote;
+  const result = validateShipment(mawb, f.result, f.evidence);
+  assert.equal(result.summary.atd.value, '01 Sep 2026 10:00');
+  assert.equal(result.summary.ata.value, '01 Sep 2026 15:00');
+  assert.equal(result.segments[0]!.actualArrival!.quote, quote);
+  for (const invalid of ['计划起飞 01 Sep 2026 10:00 预计到达 01 Sep 2026 15:00', '理货完成 01 Sep 2026 10:00 留场提货 01 Sep 2026 15:00']) {
+    const invalidQuote = `EK123 HKG RUH ${invalid}`;
+    f.page.text = `${mawb}\n${invalidQuote}`;
+    f.result.segments[0]!.actualDeparture!.quote = invalidQuote;
+    f.result.segments[0]!.actualArrival!.quote = invalidQuote;
+    const rejected = validateShipment(mawb, f.result, f.evidence);
+    assert.equal(rejected.summary.atd.value, null); assert.equal(rejected.summary.ata.value, null);
+  }
+});
 test('fabricated quote, unvisited evidence, wrong shipment and wrong route cannot supply actual time', () => {
   for (const change of ['quote', 'id', 'mawb', 'route', 'time']) {
     const f = verifiedFixture(); const time = f.result.segments[0]!.actualArrival!;

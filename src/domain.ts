@@ -36,7 +36,7 @@ export type ActualTime = z.infer<typeof actualTimeSchema>;
 export interface Evidence {
   id: string; jobId: string; attempt: number; url: string; capturedAt: string;
   text: string; sha256: string; screenshot: boolean; sequence: number;
-  kind: 'page' | 'navigation_attempt';
+  kind: 'page' | 'navigation_attempt' | 'captcha';
 }
 export interface SummaryTime { value: string | null; kind: 'value' | 'missing' | 'multiple' | 'conflict'; note: string }
 export interface ValidatedShipment extends Shipment {

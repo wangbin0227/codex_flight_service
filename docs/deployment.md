@@ -1,5 +1,7 @@
 # 阿里云 ECS 部署
 
+本页为 Docker Compose 路径。**不使用 Docker 时，请按 [原生 systemd 部署](deployment-native.md) 操作**；两者使用同一套 API 和 Worker 代码，原生配置默认并发 1。
+
 ## 1. 环境与部署范围
 
 推荐首版使用 Ubuntu 24.04 / Debian 12、x86_64 ECS，**4 vCPU / 8 GB RAM / 40 GB 以上磁盘**，并发从 2 开始。这是容量起点，不是压测保证。需要 Docker Engine 和 Compose v2，可从 Docker 官方源安装。
@@ -75,6 +77,7 @@ REQUESTS_PER_MINUTE=120
 - `CODEX_BASE_URL` 留空：使用默认 OpenAI provider。自定义地址必须为 HTTPS，证书校验保持开启；证书错误应修复证书，不能关闭 TLS 校验。
 - 自定义网关需要支持 Codex 使用的 Responses API、工具调用、流式结果和结构化输出。不能只用一次普通对话成功来判断兼容。
 - 模型必须在你的网关/账户中实际可用。这里沿用本项目需求指定的名称，不保证任何账户都有此模型。
+- 验证码流程需要模型和网关支持 MCP 图像输入。独立验证码资源域名可配置 `BROWSER_RESOURCE_HOSTS`，只开放实际需要的 iframe/图片资源；用法、重试预算和验收见 [captcha.md](captcha.md)。
 - 全局并发在数据库层限制，同航司前缀最多一个运行任务；API 和 Worker 的超时相互独立。
 
 ## 5. 构建并启动

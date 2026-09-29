@@ -24,7 +24,7 @@ export class CodexRunner implements Runner {
     const signingKey = randomBytes(32).toString('hex');
     const mcpPath = resolve(dirname(fileURLToPath(import.meta.url)), '../browser/mcp.js');
     const settings = { jobId: job.id, attempt: job.attempt, mawb: job.mawb, evidenceDir, signingKey,
-      allowedHosts: this.config.allowedHosts, executablePath: this.config.browserExecutable };
+      allowedHosts: this.config.allowedHosts, resourceHosts: this.config.resourceHosts, executablePath: this.config.browserExecutable };
     const toml = (value: string) => JSON.stringify(value);
     const provider = this.config.modelBaseUrl ? `model_provider = "flight_gateway"
 [model_providers.flight_gateway]
@@ -73,6 +73,10 @@ approval_mode = "approve"
 approval_mode = "approve"
 [mcp_servers.flight_browser.tools.browser_read_more]
 approval_mode = "approve"
+[mcp_servers.flight_browser.tools.browser_captcha_inspect]
+approval_mode = "approve"
+[mcp_servers.flight_browser.tools.browser_captcha_act]
+approval_mode = "approve"
 [mcp_servers.flight_browser.env]
 FLIGHT_BROWSER_SETTINGS = ${toml(JSON.stringify(settings))}
 ${process.env.PLAYWRIGHT_BROWSERS_PATH ? `PLAYWRIGHT_BROWSERS_PATH = ${toml(process.env.PLAYWRIGHT_BROWSERS_PATH)}` : ''}
@@ -108,7 +112,7 @@ ${process.env.PLAYWRIGHT_BROWSERS_PATH ? `PLAYWRIGHT_BROWSERS_PATH = ${toml(proc
             if (event.type === 'turn.failed' || event.type === 'error') fatal = true;
             if (event.type === 'item.started' && event.item?.type === 'mcp_tool_call') {
               const tool = String(event.item.tool ?? '');
-              const stage = tool === 'browser_open' ? '正在访问查询入口或航司官网' : tool === 'browser_fill' || tool === 'browser_click'
+              const stage = tool.startsWith('browser_captcha_') ? '正在识别并处理官网验证码' : tool === 'browser_open' ? '正在访问查询入口或航司官网' : tool === 'browser_fill' || tool === 'browser_click'
                 ? '正在操作官网查询' : '正在读取运输记录与证据';
               if (stage !== lastStage) { progress(stage); lastStage = stage; }
             }

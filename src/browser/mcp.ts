@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { BrowserSession, type BrowserSettings } from './session.js';
+import { captchaActionSchema } from './captcha.js';
 
 // Configuration arrives over a per-job inherited environment, never from website content.
 const settings = JSON.parse(process.env.FLIGHT_BROWSER_SETTINGS ?? '{}') as BrowserSettings;
@@ -16,7 +17,7 @@ async function respond(fn: () => ReturnType<BrowserSession['snapshot']>) {
   } catch (error) {
     // Do not expose arbitrary browser errors (possibly containing URLs with credentials).
     const detail = error instanceof Error ? error.message.match(/net::[A-Z_]+|Timeout \d+ms exceeded/)?.[0] : undefined;
-    const message = error instanceof Error && /budget|reference|AWB|track-trace|approved|Unsupported/.test(error.message)
+    const message = error instanceof Error && /budget|reference|AWB|track-trace|approved|Unsupported|^CAPTCHA/.test(error.message)
       ? error.message : `Browser action failed${detail ? ` (${detail})` : ''}. Navigation attempts are recorded. Read a snapshot, retry once, or open the official airline fallback.`;
     return { isError: true, content: [{ type: 'text' as const, text: message }] };
   }
@@ -29,6 +30,9 @@ server.tool('browser_press', 'Press Enter, Tab, ArrowDown, or Escape on a curren
 server.tool('browser_select', 'Select a native tracking form dropdown option.', { ref: z.string(), value: z.string().max(100) }, ({ ref, value }) => respond(() => session.select(ref, value)));
 server.tool('browser_wait', 'Wait up to 15 seconds for expected visible text; use for dynamically loaded results.', { text: z.string().min(1).max(100) }, ({ text }) => respond(() => session.wait(text)));
 server.tool('browser_read_more', 'Read a later character range when snapshot text was truncated. Returns a new evidence ID.', { start: z.number().int().min(0).max(490000) }, ({ start }) => respond(() => session.read(start)));
+server.tool('browser_captcha_inspect', 'Inspect a snapshot reference marked captcha:region. Returns a cropped image for visual reasoning, a single-use challengeId, exact image dimensions and allowed captcha input refs. Inspect AFTER filling the AWB. Do not snapshot between inspection and action.', { ref: z.string() }, ({ ref }) => respond(() => session.captchaInspect(ref)));
+server.tool('browser_captcha_act', 'Complete ordinary visual verification: fill a listed CAPTCHA input, click within the inspected image, or drag inside that image. Coordinates use the cropped image origin, not the page. One action per challengeId; returns a fresh snapshot. Does not handle SMS, email, OTP or login. Budgets per query attempt: 3 fills, 12 clicks, 3 drags.',
+  { challengeId: z.string().uuid(), action: captchaActionSchema }, ({ challengeId, action }) => respond(() => session.captchaAct(challengeId, action)));
 let closing = false;
 async function close() { if (closing) return; closing = true; await session.close(); await server.close(); process.exit(0); }
 process.on('SIGTERM', () => void close()); process.on('SIGINT', () => void close()); process.stdin.on('end', () => void close());

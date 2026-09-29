@@ -16,7 +16,8 @@
     "check": "npm run typecheck && npm test && npm run build",
     "doctor": "node --import tsx scripts/doctor.ts",
     "smoke": "node --import tsx scripts/smoke.ts",
-    "browser:install": "playwright install chromium"
+    "browser:install": "playwright install chromium",
+    "test:browser": "node dist/scripts/check-captcha.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
