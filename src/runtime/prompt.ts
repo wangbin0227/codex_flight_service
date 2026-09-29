@@ -10,7 +10,7 @@ export function buildPrompt(mawb: string): string {
 5. 核对完整提单号属于当前查询，读取所有航段、拆批和公路转运。不能把实际查询过一票的资料用于另一票。
 6. 每个时间引用 browser 工具实际返回的 evidenceId。quote 必须是该次页面文本的连续原文，可仅合并空白；必须包含航班号、起止机场、实际标签、完整原始日期时间。value 保留原始时间表达，不做时区换算，不改写日期格式。
 7. 若时间的日期与时分分开显示，value 可用连续原文的日期加时分（只合并空白）；不能补出未出现的年份。无法形成证据则留 null 并说明。
-8. ATD/DEP/Actual Departure 才作为实际出发，ATA/ARR/Actual Arrival 才作为实际到达；ETD/ETA/计划时间/RCS/RCF/DLV 均不能替代。运输实际时间与事件记录时间冲突时写 time_conflict issue（对应 segmentId、departure/arrival、全部原始值），该时间留 null。
+8. ATD/DEP/Actual Departure/实际起飞/实际出发才作为实际出发，ATA/ARR/Actual Arrival/实际到达/实际抵达才作为实际到达。中文实际标签分别规范为 label=ATD/ATA，但 quote 必须保留中文原文，不能翻译或增补英文标签；不必为获取英文标签而切换语言重新验证。ETD/ETA/计划时间/RCS/RCF/DLV 均不能替代。运输实际时间与事件记录时间冲突时写 time_conflict issue（对应 segmentId、departure/arrival、全部原始值），该时间留 null。
 9. 同一航班的重复节点不要生成重复航段。保留分批件数、航班日期、group；卡车航段 transportType=road。行程起止机场来自运单，不是随便选中转机场。
 10. journeyComplete 只有在全票到达/交付有证据时为 true，提供 completionEvidenceId 和 completionQuote；部分到达不能声称全票完成。
 11. 遇到普通视觉验证码时主动完成验证，遵循下面的验证码流程。登录、短信/邮箱动态码、安全警告或验证码尝试用尽才视为受阻；尝试其他已允许的官方入口，仍受阻则返回 blocked 并说明原因，不请求人工、不伪造成功。not_found 必须来自官网明确的同票无记录结果，验证码未通过、空白页或尚未提交查询时出现的默认“暂无信息”都不能作为无记录证明。

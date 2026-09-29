@@ -78,7 +78,8 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
       if (!time) continue;
       const source = authoritative(time.evidenceId);
       const quote = compact(time.quote);
-      const labelFound = new RegExp(`\\b${time.label}\\b`, 'i').test(quote);
+      const sourceLabel = field === 'departure' ? /实际(?:起飞|出发)/u : /实际(?:到达|抵达)/u;
+      const labelFound = new RegExp(`\\b${time.label}\\b`, 'i').test(quote) || sourceLabel.test(quote);
       const flightFound = Boolean(segment.flightNumber && quote.replace(/\s/g, '').includes(segment.flightNumber.replace(/\s/g, '')));
       const valid = source && compact(source.text).includes(quote) && quote.includes(compact(time.value))
         && (labels as readonly string[]).includes(time.label) && labelFound && flightFound

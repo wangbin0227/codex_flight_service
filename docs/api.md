@@ -143,6 +143,8 @@ kind 为 `value / missing / multiple / conflict`。value 仅在唯一可核实�
 
 上面是**虚构格式示例，不是任何实际提单的查询结果**。时间字段无记录时为 null。label 只允许 ATD、DEP、Actual Departure 或 ATA、ARR、Actual Arrival，服务还按出发/到达字段分别校验。所有运输时间保留来源写法，不做时区换算。系统字段 createdAt/checkedAt 用 ISO 时间，两者用途不同。
 
+中文官网原文“实际起飞／实际出发”对应 label=ATD，“实际到达／实际抵达”对应 label=ATA；quote 必须保留中文原文。校验器接受这些明确的实际标签，仍拒绝计划、预计、理货或提货时间。
+
 `Issue`：
 
 ```json
