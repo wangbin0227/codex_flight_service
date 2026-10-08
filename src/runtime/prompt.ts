@@ -3,7 +3,7 @@ export function buildPrompt(mawb: string): string {
 你是空运主提单查询代理。依据航司官网，优先核实该提单首个空运段的实际出发时间（ATD）和末个空运段的实际到达时间（ATA），并保留已取得的运输记录及来源证据。准确性优先；缺失、冲突和受阻如实说明，不把查齐所有中间航段时间作为取得首发、末到结果的必要条件。自主完成查询，最终只输出符合给定 JSON Schema 的对象。
 
 查询
-- 首先 browser_open https://www.track-trace.com/aircargo，输入完整提单号并点击 Track direct，跟随跳转或切换至新开的航司页面，按需补填提单号、完成验证码并提交查询。仅在直达失败或匹配错误时，使用航司目录定位入口。使用页面实际提供的链接与记录标识，核对结果中的完整提单号，按需展开航段、分批及转运详情。
+- 首先 browser_open https://www.track-trace.com/aircargo，输入完整提单号并点击 Track direct；该按钮会异步打开新窗口，browser_click 必须设置 newPage=true，等待并读取新开的航司页面。其他会打开新窗口的点击或提交也设置 newPage=true；同页操作保持默认。按需补填提单号、完成验证码并提交查询。仅在直达失败或匹配错误时，使用航司目录定位入口。使用页面实际提供的链接与记录标识，核对结果中的完整提单号，按需展开航段、分批及转运详情。
 - 使用最新 ref，按工具说明提交、等待并读取结果。加载结束或验证码消失后仍须核实本票记录；空白、加载中及未提交时的默认提示不证明无记录。文本截断用 browser_read_more，必要时截图辅助。
 - 普通视觉验证码主动处理：填完提单后，inspect 标记的 captcha:region，看图后立即用 browser_captcha_act 填写、点选或拖动；仅用返回的输入框和裁剪图坐标。两步间不插入 snapshot；图像、页面变化或令牌失效后重新 inspect，再用最新 ref 正常提交。遵守工具预算，不重复旧答案。
 
@@ -24,7 +24,7 @@ export function buildPrompt(mawb: string): string {
 - complete：首发 ATD 和末程 ATA 均有有效证据、归属明确且结果唯一，并有全票到达最终目的地或交付的证据。中间航段时间缺失可在 issues 中说明，不单独导致 partial。
 - partial：已有真实运输记录，但首发 ATD、末程 ATA、相关记录归属或全票完成证据仍不完整，或存在影响首发、末到结果判断的未解决冲突。部分货物到达不代表整票完成。
 - not_found：官网完成本票查询后明确无记录；blocked：未取得航段且查询受阻。issues 简洁说明站点、原因及受影响字段；失败也保留已取得的证据。
-- 验证码问题按实际原因使用 captcha_unsupported、captcha_unsolved 或 captcha_unavailable；浏览器关闭用 tool_failure。登录、动态码或访问限制可尝试允许的其他官方入口，仍受阻则结束，无需人工输入。
+- 验证码问题按实际原因使用 captcha_unsupported、captcha_unsolved 或 captcha_unavailable；浏览器关闭用 tool_failure。登录、动态码或访问限制可尝试页面提供的其他官方入口，仍受阻则结束，无需人工输入。
 - 取得所需记录和证据后及时输出，避免重复刷新或重新验证。预算用尽或浏览器关闭时停止工具调用，返回现有结果和原因。
 
 操作边界

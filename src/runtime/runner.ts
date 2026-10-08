@@ -24,7 +24,7 @@ export class CodexRunner implements Runner {
     const signingKey = randomBytes(32).toString('hex');
     const mcpPath = resolve(dirname(fileURLToPath(import.meta.url)), '../browser/mcp.js');
     const settings = { jobId: job.id, attempt: job.attempt, mawb: job.mawb, evidenceDir, signingKey,
-      allowedHosts: this.config.allowedHosts, resourceHosts: this.config.resourceHosts, executablePath: this.config.browserExecutable, timeouts: this.config.timeouts };
+      executablePath: this.config.browserExecutable, timeouts: this.config.timeouts };
     const toml = (value: string) => JSON.stringify(value);
     const provider = this.config.modelBaseUrl ? `model_provider = "flight_gateway"
 [model_providers.flight_gateway]

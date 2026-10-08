@@ -13,7 +13,7 @@ export interface WaitCondition { text: string; state?: 'visible' | 'hidden' }
 
 export interface BrowserSettings {
   jobId: string; attempt: number; mawb: string; evidenceDir: string; signingKey: string;
-  allowedHosts: string[]; resourceHosts?: string[]; executablePath?: string; timeouts?: Timeouts;
+  executablePath?: string; timeouts?: Timeouts;
 }
 export class BrowserSession {
   private browser?: Browser; private context?: BrowserContext; private page?: Page;
@@ -25,8 +25,7 @@ export class BrowserSession {
   get isClosed() { return this.closed; }
   constructor(readonly settings: BrowserSettings) {}
   async start() {
-    const networkHosts = [...this.settings.allowedHosts, ...(this.settings.resourceHosts ?? [])];
-    this.proxy = await startProxy(networkHosts, this.timeouts.proxyIdleMs);
+    this.proxy = await startProxy(this.timeouts.proxyIdleMs);
     this.browser = await chromium.launch({ headless: true, executablePath: this.settings.executablePath,
       timeout: this.timeouts.browserLaunchMs,
       proxy: { server: this.proxy.url }, args: ['--disable-quic', '--proxy-bypass-list=<-loopback>'],
@@ -35,9 +34,9 @@ export class BrowserSession {
     this.context = await this.browser.newContext({ acceptDownloads: false, serviceWorkers: 'block', viewport: { width: 1440, height: 1100 } });
     await this.context.route('**/*', async route => {
       try {
-        const req = route.request();
-        const topLevel = req.isNavigationRequest() && req.frame().parentFrame() === null;
-        assertUrl(req.url(), topLevel ? this.settings.allowedHosts : networkHosts);
+        // Navigation and resources share the same public HTTPS policy. In
+        // particular, a popup's first request does not require a Frame yet.
+        assertUrl(route.request().url());
         await route.continue();
       }
       catch { await route.abort('blockedbyclient'); }
@@ -76,7 +75,7 @@ export class BrowserSession {
   }
   async open(url: string) {
     this.captcha.reset(); this.refs.clear();
-    assertUrl(url, this.settings.allowedHosts);
+    assertUrl(url);
     if (this.sequence === 0 && url.replace(/\/$/, '') !== DIRECTORY_URL) throw new Error('Open track-trace first.');
     const text = `Attempted browser navigation to ${url}. This is an action record, not shipment evidence.`;
     const attempt: Evidence = { id: randomUUID(), jobId: this.settings.jobId, attempt: this.settings.attempt,
@@ -96,7 +95,7 @@ export class BrowserSession {
   private async capture(screenshot: boolean) {
     const page = this.current();
     if (page.url() === 'about:blank') throw new Error('Open the tracking directory first.');
-    assertUrl(page.url(), this.settings.allowedHosts);
+    assertUrl(page.url());
     this.refs.clear(); this.captcha.reset();
     let text = '', controls = '', title = '';
     const refs = new Map<string, Locator>();
@@ -146,12 +145,30 @@ export class BrowserSession {
     return { evidenceId: evidence.id, url: evidence.url, text: text.slice(0, 65000), truncated: text.length > 65000, image };
   }
   private ref(id: string) { const locator = this.refs.get(id); if (!locator) throw new Error('Stale element reference. Read a new snapshot.'); return locator; }
-  async click(ref: string, waitFor?: WaitCondition) {
-    this.current(); this.captcha.reset();
-    await this.ref(ref).click({ timeout: 10_000 });
-    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 });
-    if (waitFor) await this.waitForCondition(waitFor);
+  private async actionSnapshot(action: () => Promise<void>, waitFor?: WaitCondition, newPage = false) {
+    const source = this.current(); this.captcha.reset();
+    // Navigation and any result wait share the action budget used by readTimeouts,
+    // leaving the configured snapshot budget inside the outer MCP deadline.
+    const actionDeadline = Date.now() + Math.max(this.timeouts.navigationMs, 20_000 + (waitFor ? this.timeouts.waitMs : 0));
+    const remaining = () => Math.max(1, actionDeadline - Date.now());
+    // Listen before the action: Track direct opens its popup after an AJAX response.
+    const [popup] = await Promise.all([
+      newPage ? source.waitForEvent('popup', { timeout: Math.min(this.timeouts.navigationMs, remaining()) }) : undefined,
+      action(),
+    ]);
+    if (popup) {
+      this.page = popup;
+      // Some sites open about:blank first, then navigate it asynchronously.
+      await popup.waitForURL(url => url.protocol !== 'about:', { waitUntil: 'domcontentloaded', timeout: remaining() });
+    } else {
+      await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+    }
+    if (waitFor) await this.waitForCondition(waitFor, Math.min(this.timeouts.waitMs, remaining()));
     return this.snapshot();
+  }
+  async click(ref: string, waitFor?: WaitCondition, newPage = false) {
+    const locator = this.ref(ref);
+    return this.actionSnapshot(() => locator.click({ timeout: 10_000 }), waitFor, newPage);
   }
   async fill(ref: string, value: string) {
     this.current(); this.captcha.reset();
@@ -162,22 +179,19 @@ export class BrowserSession {
     await this.ref(ref).fill(value, { timeout: 5000 });
     return this.snapshot();
   }
-  async press(ref: string, key: string, waitFor?: WaitCondition) {
-    this.current(); this.captcha.reset();
+  async press(ref: string, key: string, waitFor?: WaitCondition, newPage = false) {
     if (!['Enter', 'Tab', 'ArrowDown', 'Escape'].includes(key)) throw new Error('Unsupported key');
-    await this.ref(ref).press(key, { timeout: 5000 });
-    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10_000 });
-    if (waitFor) await this.waitForCondition(waitFor);
-    return this.snapshot();
+    const locator = this.ref(ref);
+    return this.actionSnapshot(() => locator.press(key, { timeout: 5000 }), waitFor, newPage);
   }
   async select(ref: string, value: string) {
     this.current(); this.captcha.reset(); await this.ref(ref).selectOption(value, { timeout: 5000 }); return this.snapshot();
   }
-  private async waitForCondition(condition: WaitCondition) {
+  private async waitForCondition(condition: WaitCondition, timeout = this.timeouts.waitMs) {
     const page = this.current(); this.captcha.reset();
     const matches = page.getByText(condition.text, { exact: false });
     // Filtering visible matches also handles duplicated hidden templates.
-    await matches.filter({ visible: true }).first().waitFor({ state: condition.state ?? 'visible', timeout: this.timeouts.waitMs });
+    await matches.filter({ visible: true }).first().waitFor({ state: condition.state ?? 'visible', timeout });
   }
   async wait(text: string, state: 'visible' | 'hidden' = 'visible') {
     await this.waitForCondition({ text, state });
@@ -192,7 +206,7 @@ export class BrowserSession {
   }
   async captchaInspect(ref: string) {
     const page = this.current();
-    assertUrl(page.url(), this.settings.allowedHosts);
+    assertUrl(page.url());
     const capture = await this.captcha.inspect(page, ref);
     this.assertActive();
     const { image, ...metadata } = capture;
@@ -206,7 +220,7 @@ export class BrowserSession {
   }
   async captchaAct(challengeId: string, action: CaptchaAction) {
     const page = this.current();
-    assertUrl(page.url(), this.settings.allowedHosts);
+    assertUrl(page.url());
     await this.captcha.act(page, challengeId, action);
     return this.snapshot(true);
   }

@@ -3,12 +3,6 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 import { readTimeouts, type Timeouts } from './timeouts.js';
 
-export const DEFAULT_HOSTS = [
-  'track-trace.com', 'skycargo.com', 'emirates.com', 'ckair.com', 'atlasair.com',
-  'csair.com', 'latamcargo.com', 'turkishcargo.com', 'champ.aero', 'mercator.com',
-  'qrcargo.com', 'cathaycargo.com', 'lufthansa-cargo.com', 'saudiacargo.com',
-  'cargolux.com', 'afklcargo.com', 'ethiopiancargo.com', 'etihadcargo.com',
-];
 const integer = (fallback: number, min: number, max: number) => z.coerce.number().int().min(min).max(max).default(fallback);
 const reasoningEffort = z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 export interface Config {
@@ -16,7 +10,7 @@ export interface Config {
   concurrency: number; jobTimeoutMs: number; leaseMs: number; maxAttempts: number;
   maxQueued: number; maxOwnerQueued: number; requestLimit: number;
   codexBin: string; model: string; reasoningEffort: z.infer<typeof reasoningEffort>; modelApiKey: string; modelBaseUrl?: string;
-  allowedHosts: string[]; resourceHosts: string[]; browserExecutable?: string;
+  browserExecutable?: string;
   timeouts: Timeouts;
 }
 export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys = true): Config {
@@ -36,9 +30,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys 
       throw new Error('CODEX_BASE_URL must be an HTTPS API base URL without credentials or query.');
     }
   }
-  const hosts = (env.BROWSER_ALLOWED_HOSTS?.trim() ? env.BROWSER_ALLOWED_HOSTS.split(',') : DEFAULT_HOSTS).map(h => h.trim().toLowerCase());
-  const resourceHosts = (env.BROWSER_RESOURCE_HOSTS ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
-  if ([...hosts, ...resourceHosts].some(h => !/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(h))) throw new Error('Invalid browser host allowlist.');
   return {
     dataDir: resolve(env.DATA_DIR ?? './runtime'), host: env.HOST ?? '127.0.0.1',
     port: integer(8080, 1, 65535).parse(env.PORT), apiKeys,
@@ -51,7 +42,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, requireApiKeys 
     codexBin: env.CODEX_BIN ? (env.CODEX_BIN.includes('/') ? resolve(env.CODEX_BIN) : env.CODEX_BIN) : resolve('node_modules/.bin/codex'),
     model: env.CODEX_MODEL ?? 'gpt-6-sol', reasoningEffort: reasoningEffort.default('high').parse(env.CODEX_REASONING_EFFORT),
     modelApiKey: secret('CODEX_API_KEY'),
-    modelBaseUrl: base, allowedHosts: hosts, resourceHosts, browserExecutable: env.BROWSER_EXECUTABLE_PATH,
+    modelBaseUrl: base, browserExecutable: env.BROWSER_EXECUTABLE_PATH,
     timeouts: readTimeouts(env),
   };
 }

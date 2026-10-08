@@ -12,7 +12,7 @@ import { readEvidence } from '../src/evidence.js';
 const root = await mkdtemp(join(tmpdir(), 'flight-captcha-check-'));
 const jobId = randomUUID(), key = 'owned-fixture-evidence-key';
 const session = new BrowserSession({ jobId, attempt: 1, mawb: '112-90239332', signingKey: key,
-  evidenceDir: root, allowedHosts: ['track-trace.com', 'airline.example'], resourceHosts: ['challenge.example'] });
+  evidenceDir: root });
 const fixture = `<!doctype html><meta charset="utf-8"><style>body{font:20px sans-serif}canvas{display:block}#captcha-widget{position:relative;width:320px;height:100px;background:#ddd}#slider{position:absolute;left:0;top:50px;width:40px;height:40px;background:blue}#target{position:absolute;left:220px;top:50px;width:50px;height:40px;background:green}</style>
 <label>AWB<input id="awb" aria-label="AWB"></label>
 <div class="verify-row"><canvas id="img-verify" width="160" height="60"></canvas><input id="code-verify" aria-label="图形验证码"><button id="refresh">换图</button></div>
@@ -50,7 +50,7 @@ try {
   });
   await session.open(DIRECTORY_URL);
   let s = await session.open('https://airline.example/tracking');
-  await assert.rejects(session.open('https://challenge.example/frame'), /approved/);
+  await assert.rejects(session.open('https://127.0.0.1/'), /public HTTPS/);
   s = await session.snapshot();
   await assert.rejects(session.fill(ref(s, 'AWB'), 'A7B9'), /Only the current AWB/);
   s = await session.snapshot();

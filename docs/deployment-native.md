@@ -110,7 +110,6 @@ CODEX_BASE_URL=https://your-authorized-gateway.example/v1
 WORKER_CONCURRENCY=1
 JOB_TIMEOUT_SECONDS=600
 MAX_ATTEMPTS=2
-BROWSER_ALLOWED_HOSTS=
 ```
 
 自定义网关需兼容 Codex Responses / 工具调用 / 结构化输出。`CODEX_BASE_URL` 留空使用默认 provider；示例域名必须替换，保持 TLS 验证开启。模型名称需在账户中可用。推理强度仍在 `src/runtime/runner.ts` 中固定为 `low`，本次原生部署配置未修改这一行为。

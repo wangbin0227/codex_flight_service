@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CaptchaBudget, assertCaptchaText, assertPoint, captchaRole, type ElementInfo } from '../src/browser/captcha.js';
-import { readConfig } from '../src/config.js';
 import { validateShipment } from '../src/evidence.js';
 import { mawb, verifiedFixture } from './helpers.js';
 
@@ -34,10 +33,4 @@ test('challenge screenshots cannot prove actual times, completion or absence', (
   f.result.segments = []; f.result.status = 'not_found'; f.page.text += '\nNo records found';
   result = validateShipment(mawb, f.result, f.evidence);
   assert.equal(result.status, 'blocked');
-});
-test('CAPTCHA resource hosts are distinct from navigation hosts and reject malformed hosts', () => {
-  const config = readConfig({ BROWSER_RESOURCE_HOSTS: 'challenge.example.com, images.example.com' }, false);
-  assert.deepEqual(config.resourceHosts, ['challenge.example.com', 'images.example.com']);
-  assert.equal(config.allowedHosts.includes('challenge.example.com'), false);
-  assert.throws(() => readConfig({ BROWSER_RESOURCE_HOSTS: 'https://example.com' }, false));
 });

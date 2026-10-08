@@ -11,20 +11,18 @@ export function isPublicAddress(address: string): boolean {
     return ip.range() === 'unicast';
   } catch { return false; }
 }
-export function allowedHost(host: string, allow: string[]): boolean {
-  const lower = host.toLowerCase().replace(/\.$/, '');
-  return allow.some(root => lower === root || lower.endsWith(`.${root}`));
-}
-export function assertUrl(value: string, allow: string[]): URL {
+export function assertUrl(value: string): URL {
   const url = new URL(value);
-  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') || !allowedHost(url.hostname, allow)) {
-    throw new Error('Destination is not an approved HTTPS airline host.');
+  const host = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')
+    || host === 'localhost' || host.endsWith('.localhost') || (ipaddr.isValid(host) && !isPublicAddress(host))) {
+    throw new Error('Destination must be a public HTTPS address on port 443 without credentials.');
   }
   return url;
 }
 // Every Chromium network connection uses this proxy. DNS is resolved and checked before
 // connecting to a pinned address; redirects and subresources cannot reach ECS metadata or LANs.
-export async function startProxy(allow: string[], idleTimeoutMs = DEFAULT_TIMEOUTS.proxyIdleMs): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
+export async function startProxy(idleTimeoutMs = DEFAULT_TIMEOUTS.proxyIdleMs): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
   const sockets = new Set<import('node:net').Socket>();
   const server = createServer((_req, res) => { res.writeHead(403); res.end('HTTPS only'); });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
@@ -34,9 +32,8 @@ export async function startProxy(allow: string[], idleTimeoutMs = DEFAULT_TIMEOU
     client.on('close', () => upstream?.destroy());
     try {
       const authority = req.url ?? '';
-      if (!/^[a-z0-9.-]+:443$/i.test(authority)) throw new Error('Invalid tunnel');
-      const host = authority.slice(0, -4);
-      if (!allowedHost(host, allow)) throw new Error('Host blocked');
+      if (!/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\]):443$/i.test(authority)) throw new Error('Invalid tunnel');
+      const host = assertUrl(`https://${authority}`).hostname.replace(/^\[|\]$/g, '');
       const addresses = await lookup(host, { all: true });
       if (!addresses.length || addresses.some(a => !isPublicAddress(a.address))) throw new Error('Address blocked');
       const address = addresses[0]!;

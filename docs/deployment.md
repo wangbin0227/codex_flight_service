@@ -85,7 +85,7 @@ REQUESTS_PER_MINUTE=120
 - `CODEX_BASE_URL` 留空：使用默认 OpenAI provider。自定义地址必须为 HTTPS，证书校验保持开启；证书错误应修复证书，不能关闭 TLS 校验。
 - 自定义网关需要支持 Codex 使用的 Responses API、工具调用、流式结果和结构化输出。不能只用一次普通对话成功来判断兼容。
 - 模型必须在你的网关/账户中实际可用。这里沿用本项目需求指定的名称，不保证任何账户都有此模型。
-- 验证码流程需要模型和网关支持 MCP 图像输入。独立验证码资源域名可配置 `BROWSER_RESOURCE_HOSTS`，只开放实际需要的 iframe/图片资源；用法、重试预算和验收见 [captcha.md](captcha.md)。
+- 验证码流程需要模型和网关支持 MCP 图像输入。航司入口、iframe 和图片等资源允许访问任意公网 HTTPS 域名，无需配置域名白名单；用法、重试预算和验收见 [captcha.md](captcha.md)。
 - `CODEX_REASONING_EFFORT` 默认 `high`，写入每票 Codex 会话的 `model_reasoning_effort`。其他强度需要当前模型与 CLI 支持。修改模型或推理强度后执行 `docker compose up -d --no-build worker` 重新创建 Worker；仅 `restart` 不会更新容器环境变量。
 - 全局并发在数据库层限制，同航司前缀最多一个运行任务；API 和 Worker 的超时相互独立。
 
@@ -231,6 +231,6 @@ docker compose up -d api worker
 | query_timeout | 航司响应慢或页面变化；先看已保存证据，再调整超时和提示词 |
 | blocked | 读取 result.issues，区分验证码、登录、无结果与入口不可达 |
 | Chromium 启动失败 | 系统依赖、共享内存、进程数限制；使用项目镜像可减少差异 |
-| 部分页面资源被拦截 | 检查航司实际依赖域名，由管理员审查后更新 DEFAULT_HOSTS 或部署 BROWSER_ALLOWED_HOSTS；不能放开内网地址 |
+| 部分页面资源被拦截 | 检查资源是否使用 HTTPS 443、DNS 是否解析到公网，以及证书和网络连接；航司与资源域名无需单独放行 |
 
 容器中的浏览器采用 Playwright 默认启动行为，Chromium 自身的 sandbox 默认未启用；服务依靠专用非 root 容器、只读根文件系统、禁用 Codex Shell 和浏览器出口限制。高隔离需求应使用独立沙箱/微虚拟机执行池，而非与敏感业务共享 Worker 容器。
