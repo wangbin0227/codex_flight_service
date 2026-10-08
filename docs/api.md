@@ -114,10 +114,10 @@ X-User-Id: <可信服务端识别的登录用户 ID>
 `SummaryTime`：
 
 ```json
-{"value":null,"kind":"multiple","note":"分批到达"}
+{"value":"02 Sep 2026 15:00","kind":"value","note":"分批到达，取末批实际到达时间（237/237 件）"}
 ```
 
-kind 为 `value / missing / multiple / conflict`。唯一时间通过本票原文及实际标签校验后，value 可以非空；航段或件数尚未确认时，`kind=value` 同时返回 `note=待核实：航段归属或件数未确认`。`仅部分记录` 表示不能把该值理解成全票完成；多个说明用分号连接。即使 kind=value，界面也须显示非空 note，不能仅凭 value 非空判断已全面核实。
+kind 为 `value / missing / multiple / conflict`。可比较的分批实际时间返回 `kind=value`：ATD 取首批最早出发，ATA 取已知末批最晚到达，保留被选中记录的原始表达。只有去重后的末程到达件数覆盖整票时，ATA 才表示整票到齐；否则 note 明确标注“仅部分记录”。multiple 表示已有多个时间，但日期或时区不足以确定先后，不再用于正常分批到达。航段或件数尚未确认时仍保留时间并标记待核实；多个说明用分号连接。即使 kind=value，界面也须显示非空 note，不能仅凭 value 非空判断全票完成。
 
 `Segment`：
 
@@ -147,7 +147,7 @@ kind 为 `value / missing / multiple / conflict`。唯一时间通过本票原�
 
 quote 保留连续原文中的实际标签与原始时间；提单号、航班及机场可由同一 evidenceId 的页面上下文证明。本票原文及实际标签通过校验，而航班格式、航段或件数无法自动确认时，保留时间和证据，增加 `time_context_unverified`，并在对应首发/末到汇总的 note 标记待核实。明确错票、引用不存在、时间或实际标签缺失、引用记录与所填航班/机场明确不符时，字段仍置空并记录 `unverified_time`。原始批次、日期与来源关联须保留，按提单口径合并互补节点不等于独立确认同一架次。
 
-`complete`（任务状态为 `succeeded`）表示首发 ATD、末程 ATA 有效、唯一、归属明确且全票完成已核实；中间航段时间缺失或不影响首末判断的冲突可保留在 issues，不单独导致 partial。首末结果或全票完成证据不足时仍为 partial。
+`complete`（任务状态为 `succeeded`）表示首末各批次实际时间有效、可确定最早出发与末批到达、归属明确且全票完成已核实；正常分批运输可以返回 complete。首末空运段按路线及前后公路接驳定位；公路时间不替代 ATD/ATA。中间航段时间缺失或不影响首末判断的冲突可保留在 issues，不单独导致 partial。首末结果或全票完成证据不足时仍为 partial。
 
 `Issue`：
 

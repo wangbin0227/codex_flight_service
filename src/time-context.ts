@@ -1,4 +1,4 @@
-import type { Segment } from './domain.js';
+import type { ActualTime, Segment } from './domain.js';
 
 export const compact = (s: string) => s.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 const mawbPattern = /(?<!\d)(\d{3})[\s-]*(\d{8})(?!\d)/gu;
@@ -38,6 +38,30 @@ export function pieceCounts(text: string): number[] {
   // and must not also act as a prefix labeling the following weight as a quantity.
   const counts = body.matchAll(/(?<![\d:./-])(\d+)\s*(?:件(?!数)|pieces\b|pcs\b)|(?:件数|\bpieces\b|\bpcs\b)\s*[:：]?\s*(\d+)/giu);
   return [...counts].map(m => Number(m[1] ?? m[2]));
+}
+
+/** A quantity must belong to this event, not another row or its adjacent weight. */
+export function eventPieceCount(source: string, time: ActualTime, context: string): number | undefined {
+  const quote = compact(time.quote), value = compact(time.value);
+  const tableCounts: number[] = [];
+  let column = -1, columns = 0;
+  for (const line of source.split('INTERACTIVE ELEMENTS (current input values included):')[0]!.split('\n')) {
+    if (/\[Frame \d+\]/u.test(line)) { column = -1; columns = 0; }
+    const cells = line.split('\t').map(compact);
+    const header = cells.findIndex(c => /^(?:total\s+)?(?:pieces?|pcs|件数|件)$/iu.test(c));
+    if (header >= 0 && cells.length > 1) { column = header; columns = cells.length; continue; }
+    const row = compact(line);
+    if (column < 0 || cells.length !== columns || !/^\d+$/.test(cells[column] ?? '')
+      || !row.includes(value) || !(row.includes(quote) || quote.includes(row))) continue;
+    // A quote may cover several statuses. Only the quoted actual event counts.
+    const marker = ['ATA', 'ARR', 'Actual Arrival'].includes(time.label)
+      ? /\b(?:ATA|ARR|Actual Arrival)\b|实际(?:到达|抵达)/iu
+      : /\b(?:ATD|DEP|Actual Departure)\b|实际(?:起飞|出发)/iu;
+    if (marker.test(row)) tableCounts.push(Number(cells[column]));
+  }
+  const counts = tableCounts.length ? tableCounts : pieceCounts(quote).length ? pieceCounts(quote) : pieceCounts(context);
+  const distinct = [...new Set(counts)];
+  return distinct.length === 1 && distinct[0]! > 0 ? distinct[0] : undefined;
 }
 
 function routeAndFlight(text: string, segment: Segment) {

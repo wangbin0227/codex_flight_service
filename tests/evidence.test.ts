@@ -69,7 +69,7 @@ test('explicit conflict suppresses only affected leg and field', () => {
   assert.equal(result.summary.ata.kind, 'conflict'); assert.equal(result.summary.atd.kind, 'value');
   assert.equal(result.segments[0]!.actualArrival, null);
 });
-test('split shipments and road feeders never collapse into a single invented final time', () => {
+test('known split arrival times remain visible as partial and road feeders never replace air arrival', () => {
   const f = verifiedFixture();
   const split = structuredClone(f.result.segments[0]!); split.id = 'leg-2'; split.group = 'part 2';
   const quote = 'EK456 HKG RUH ATD 02 Sep 2026 10:00 ATA 02 Sep 2026 15:00';
@@ -77,7 +77,9 @@ test('split shipments and road feeders never collapse into a single invented fin
   split.actualDeparture = { value: '02 Sep 2026 10:00', label: 'ATD', quote, evidenceId: f.page.id };
   split.actualArrival = { value: '02 Sep 2026 15:00', label: 'ATA', quote, evidenceId: f.page.id };
   f.result.segments.push(split);
-  assert.equal(validateShipment(mawb, f.result, f.evidence).summary.ata.kind, 'multiple');
+  const partial = validateShipment(mawb, f.result, f.evidence);
+  assert.equal(partial.summary.ata.value, '02 Sep 2026 15:00');
+  assert.equal(partial.status, 'partial'); assert.match(partial.summary.ata.note, /仅部分记录/u);
   split.transportType = 'road';
   assert.equal(validateShipment(mawb, f.result, f.evidence).summary.ata.value, '01 Sep 2026 15:00');
 });

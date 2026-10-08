@@ -4,7 +4,7 @@ import { Store } from '../src/store.js';
 import { createApp } from '../src/api.js';
 import { Worker } from '../src/worker.js';
 import { ExecutionError } from '../src/runtime/runner.js';
-import { fixture, key, mawb, verifiedFixture } from './helpers.js';
+import { fixture, key, mawb, splitShipmentFixture, verifiedFixture } from './helpers.js';
 const headers = { authorization: `Bearer ${key}`, 'x-user-id': 'alice', 'idempotency-key': 'batch-request-1' };
 
 test('API to queue to worker to persisted result completes with deterministic fixture evidence', async () => {
@@ -34,6 +34,21 @@ test('API refuses arbitrary prompts, missing identity and invalid idempotency ke
       assert.equal((await app.inject({ method: 'POST', url: '/v1/batches', headers, payload })).statusCode, 400);
     }
     assert.equal((await app.inject({ method: 'POST', url: '/v1/batches', headers: { authorization: headers.authorization }, payload: { mawbs: [mawb] } })).statusCode, 400);
+  } finally { await app.close(); store.close(); f.cleanup(); }
+});
+test('all split arrivals persist as succeeded with the final batch ATA and every original segment', async () => {
+  const f = fixture(), store = new Store(f.config), app = createApp(f.config, store);
+  try {
+    const created = await app.inject({ method: 'POST', url: '/v1/batches', headers, payload: { mawbs: [mawb] } });
+    const batch = created.json(), sample = splitShipmentFixture();
+    const worker = new Worker(store, { run: async () => ({ raw: sample.result, evidence: sample.evidence }) });
+    await worker.tick();
+    const job = (await app.inject({ url: `/v1/jobs/${batch.jobs[0].id}`, headers })).json();
+    assert.equal(job.status, 'succeeded'); assert.equal(job.result.journeyComplete, true);
+    assert.equal(job.result.summary.atd.value, '26AUG26 01:00');
+    assert.equal(job.result.summary.ata.value, '29AUG26 12:06');
+    assert.match(job.result.summary.ata.note, /45\/45/u);
+    assert.deepEqual(job.result.segments, sample.result.segments);
   } finally { await app.close(); store.close(); f.cleanup(); }
 });
 test('pending actual times and warnings survive worker persistence and API responses', async () => {
