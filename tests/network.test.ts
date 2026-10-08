@@ -3,7 +3,8 @@ import { test, mock } from 'node:test';
 import dns from 'node:dns/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { connect } from 'node:net';
-import { assertUrl, isPublicAddress, startProxy } from '../src/browser/proxy.js';
+import { request } from 'node:http';
+import { assertUrl, isPublicAddress, startProxy, upgradeToHttps } from '../src/browser/proxy.js';
 import { BrowserSession } from '../src/browser/session.js';
 
 test('browser accepts public HTTPS domains without an airline or resource allowlist', () => {
@@ -19,6 +20,45 @@ test('browser still rejects localhost, metadata, private IPs, unsupported protoc
     'https://name:password@emirates.com/', 'https://localhost/', 'https://foo.localhost./', 'https://127.0.0.1/',
     'https://2130706433/', 'https://0x7f000001/', 'https://169.254.169.254/', 'https://100.100.100.200/',
     'https://[::1]/', 'https://[::ffff:127.0.0.1]/']) assert.throws(() => assertUrl(url), /public HTTPS/);
+});
+
+test('legacy HTTP URLs upgrade without changing shipment paths or query values', () => {
+  const path = '/skychain/app;jsessionid=old?service=page/nwp:Trackshipmt&awb=656%2D42988186#details';
+  assert.equal(upgradeToHttps(`http://airline.example${path}`).href, `https://airline.example${path}`);
+  assert.equal(upgradeToHttps('http://airline.example:80/').href, 'https://airline.example/');
+  assert.equal(upgradeToHttps('https://airline.example/').href, 'https://airline.example/');
+  for (const url of ['http://airline.example:8080/', 'http://airline.example:443/', 'http://user:secret@airline.example/',
+    'http://localhost/', 'http://foo.localhost./', 'http://127.0.0.1/', 'http://2130706433/',
+    'http://169.254.169.254/', 'http://100.100.100.200/', 'http://[::ffff:127.0.0.1]/', 'file:///etc/passwd']) {
+    assert.throws(() => upgradeToHttps(url), /public HTTPS/, url);
+  }
+});
+
+test('proxy upgrades legacy redirect hops with a method-preserving redirect and no HTTP upstream', async () => {
+  const lookup = mock.method(dns, 'lookup', async () => { throw new Error('HTTP must never connect to the site'); });
+  syncBuiltinESMExports();
+  const proxy = await startProxy();
+  const send = (url: string, method = 'GET') => new Promise<{ status: number | undefined; location: string | undefined }>((resolve, reject) => {
+    const req = request({ hostname: '127.0.0.1', port: new URL(proxy.url).port, path: url, method }, res => {
+      res.resume();
+      res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location }));
+    });
+    req.setTimeout(2000, () => req.destroy(new Error('Proxy did not respond')));
+    req.on('error', reject);
+    req.end(method === 'POST' ? 'awb=656-42988186' : undefined);
+  });
+  try {
+    for (const method of ['GET', 'POST']) {
+      assert.deepEqual(await send('http://airline.example/skychain/app?service=restart', method), {
+        status: 307, location: 'https://airline.example/skychain/app?service=restart',
+      });
+    }
+    for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/', 'http://100.100.100.200/',
+      'http://airline.example:8080/', 'http://user:secret@airline.example/', 'https://airline.example/', '/relative']) {
+      assert.deepEqual(await send(url), { status: 403, location: undefined }, url);
+    }
+    assert.equal(lookup.mock.callCount(), 0);
+  } finally { await proxy.close(); lookup.mock.restore(); syncBuiltinESMExports(); }
 });
 
 test('queries must still begin at track-trace', async () => {

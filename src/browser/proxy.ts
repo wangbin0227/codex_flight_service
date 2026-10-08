@@ -20,11 +20,27 @@ export function assertUrl(value: string): URL {
   }
   return url;
 }
+// Legacy airline links sometimes downgrade to HTTP even when HTTPS works. Only
+// upgrade the default HTTP port; every outbound connection still uses HTTPS 443.
+export function upgradeToHttps(value: string): URL {
+  const url = new URL(value);
+  if (url.protocol === 'http:' && !url.port) url.protocol = 'https:';
+  return assertUrl(url.href);
+}
 // Every Chromium network connection uses this proxy. DNS is resolved and checked before
 // connecting to a pinned address; redirects and subresources cannot reach ECS metadata or LANs.
 export async function startProxy(idleTimeoutMs = DEFAULT_TIMEOUTS.proxyIdleMs): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
   const sockets = new Set<import('node:net').Socket>();
-  const server = createServer((_req, res) => { res.writeHead(403); res.end('HTTPS only'); });
+  const server = createServer((req, res) => {
+    try {
+      if (!req.url?.startsWith('http://')) throw new Error('Invalid proxy request');
+      const destination = upgradeToHttps(req.url);
+      // Playwright routes only the first request in a redirect chain. Handle
+      // later HTTP hops here without contacting port 80 or dropping POST data.
+      res.writeHead(307, { Location: destination.href, 'Cache-Control': 'no-store' });
+      res.end();
+    } catch { res.writeHead(403); res.end('HTTPS only'); }
+  });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   server.on('connect', async (req, client, head) => {
     let upstream: import('node:net').Socket | undefined;

@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DIRECTORY_URL, type Evidence } from '../domain.js';
 import { signEvidence } from '../evidence.js';
-import { assertUrl, startProxy } from './proxy.js';
+import { assertUrl, startProxy, upgradeToHttps } from './proxy.js';
 import { CAPTCHA_SELECTOR, CaptchaController, captchaRole, describeElementsInPage, type CaptchaAction } from './captcha.js';
 import { DEFAULT_TIMEOUTS, type Timeouts } from '../timeouts.js';
 
@@ -36,8 +36,10 @@ export class BrowserSession {
       try {
         // Navigation and resources share the same public HTTPS policy. In
         // particular, a popup's first request does not require a Frame yet.
-        assertUrl(route.request().url());
-        await route.continue();
+        const destination = upgradeToHttps(route.request().url());
+        if (destination.href !== route.request().url()) {
+          await route.fulfill({ status: 307, headers: { Location: destination.href, 'Cache-Control': 'no-store' }, body: '' });
+        } else await route.continue();
       }
       catch { await route.abort('blockedbyclient'); }
     });
@@ -75,7 +77,7 @@ export class BrowserSession {
   }
   async open(url: string) {
     this.captcha.reset(); this.refs.clear();
-    assertUrl(url);
+    url = upgradeToHttps(url).href;
     if (this.sequence === 0 && url.replace(/\/$/, '') !== DIRECTORY_URL) throw new Error('Open track-trace first.');
     const text = `Attempted browser navigation to ${url}. This is an action record, not shipment evidence.`;
     const attempt: Evidence = { id: randomUUID(), jobId: this.settings.jobId, attempt: this.settings.attempt,

@@ -5,6 +5,8 @@ export function buildPrompt(mawb: string): string {
 查询
 - 首先 browser_open https://www.track-trace.com/aircargo，输入完整提单号并点击 Track direct；该按钮会异步打开新窗口，browser_click 必须设置 newPage=true，等待并读取新开的航司页面。其他会打开新窗口的点击或提交也设置 newPage=true；同页操作保持默认。按需补填提单号、完成验证码并提交查询。仅在直达失败或匹配错误时，使用航司目录定位入口。使用页面实际提供的链接与记录标识，核对结果中的完整提单号，按需展开航段、分批及转运详情。
 - 使用最新 ref，按工具说明提交、等待并读取结果。加载结束或验证码消失后仍须核实本票记录；空白、加载中及未提交时的默认提示不证明无记录。文本截断用 browser_read_more，必要时截图辅助。
+- 遇到 Session timed out、会话过期或旧链接失效，先使用页面提供的 home、restart 或应用入口重建会话，再寻找公开的 Shipments / Track Shipment 等追踪菜单。Login 页面若显示 guest 或提供公开查询菜单，仍可继续，无需登录。旧 HTTP 链接和跳转由浏览器升级为 HTTPS；若重启链接仍失败，尝试页面已提供的不带过期会话标识的应用入口，不猜测路径或参数。菜单链接的 javascript 调用若明确包含追踪 URL，可用 browser_open 打开该原始 URL。
+- 点击菜单、展开详情或提交后若工具超时，先重新 snapshot：悬停可能已展开菜单，提交或展开也可能已完成。依据最新页面继续，不把单次点击超时当成查询受阻，也不立即重复提交。
 - 普通视觉验证码主动处理：填完提单后，inspect 标记的 captcha:region，看图后立即用 browser_captcha_act 填写、点选或拖动；仅用返回的输入框和裁剪图坐标。两步间不插入 snapshot；图像、页面变化或令牌失效后重新 inspect，再用最新 ref 正常提交。遵守工具预算，不重复旧答案。
 
 运输记录
