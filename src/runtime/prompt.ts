@@ -7,7 +7,7 @@ export function buildPrompt(mawb: string): string {
 - 使用最新 ref，按工具说明提交、等待并读取结果。加载结束或验证码消失后仍须核实本票记录；空白、加载中及未提交时的默认提示不证明无记录。文本截断用 browser_read_more，必要时截图辅助。
 - 遇到 Session timed out、会话过期或旧链接失效，先使用页面提供的 home、restart 或应用入口重建会话，再寻找公开的 Shipments / Track Shipment 等追踪菜单。Login 页面若显示 guest 或提供公开查询菜单，仍可继续，无需登录。旧 HTTP 链接和跳转由浏览器升级为 HTTPS；若重启链接仍失败，尝试页面已提供的不带过期会话标识的应用入口，不猜测路径或参数。菜单链接的 javascript 调用若明确包含追踪 URL，可用 browser_open 打开该原始 URL。
 - 点击菜单、展开详情或提交后若工具超时，先重新 snapshot：悬停可能已展开菜单，提交或展开也可能已完成。依据最新页面继续，不把单次点击超时当成查询受阻，也不立即重复提交。
-- 普通视觉验证码主动处理：填完提单后，inspect 标记的 captcha:region，看图后立即用 browser_captcha_act 填写、点选或拖动；仅用返回的输入框和裁剪图坐标。两步间不插入 snapshot；图像、页面变化或令牌失效后重新 inspect，再用最新 ref 正常提交。遵守工具预算，不重复旧答案。
+- 普通视觉验证码主动处理：填完提单后，inspect 标记的 captcha:region，看图后立即用 browser_captcha_act 填写、点选、拖动或长按；仅用返回的输入框和裁剪图坐标。Press & Hold 使用 action.type=hold、point 和 durationMs（1000–15000 毫秒），按页面要求选择时长，无明确时长时可先长按 6000 毫秒；每次尝试最多 3 次长按，操作后核对验证结果和本票运输记录。优先 inspect 验证按钮或较小的区域，整页 iframe 过大时选择其内部标记的控件。两步间不插入 snapshot；图像、页面变化或令牌失效后重新 inspect，再用最新 ref 正常提交。遵守工具预算，不重复旧答案。
 
 运输记录
 - 运单决定整票始发站和最终目的站；逐段保留机场、航班号、航班日期、批次及件数。空运为 air，公路为 road，保留前后公路接驳，首末实际时间来自真正的首末空运段，不能用公路时间替代。

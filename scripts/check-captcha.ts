@@ -18,7 +18,8 @@ const fixture = `<!doctype html><meta charset="utf-8"><style>body{font:20px sans
 <div class="verify-row"><canvas id="img-verify" width="160" height="60"></canvas><input id="code-verify" aria-label="图形验证码"><button id="refresh">换图</button></div>
 <input id="sms-code" aria-label="短信验证码"><button id="query">查询</button><div id="result"></div>
 <div id="captcha-widget"><div id="slider" role="slider"></div><div id="target"></div></div>
-<iframe title="CAPTCHA frame" src="https://challenge.example/frame"></iframe>
+<button id="hold" style="display:block;width:240px;height:60px">Press &amp; Hold</button>
+<iframe title="CAPTCHA frame" style="display:block" src="https://challenge.example/frame"></iframe>
 <script>
 const image=document.getElementById('img-verify'), ctx=image.getContext('2d');let answer='A7B9';
 function paint(){ctx.fillStyle='white';ctx.fillRect(0,0,160,60);ctx.fillStyle='black';ctx.font='32px sans-serif';ctx.fillText(answer,10,40)}paint();
@@ -27,6 +28,8 @@ document.getElementById('query').onclick=()=>{document.getElementById('result').
 let down=false;document.getElementById('slider').onmousedown=()=>down=true;
 document.getElementById('target').onmouseup=()=>{if(down)document.getElementById('result').textContent='slider passed';down=false};
 document.getElementById('target').onclick=()=>document.getElementById('result').textContent='image click passed';
+let heldAt=0;document.getElementById('hold').onmousedown=()=>heldAt=performance.now();
+document.getElementById('hold').onmouseup=()=>document.getElementById('result').textContent=performance.now()-heldAt>=1000?'hold passed':'hold too short';
 </script>`;
 type Snapshot = Awaited<ReturnType<BrowserSession['snapshot']>>;
 const ref = (snapshot: Snapshot, label: string, role?: string) => {
@@ -88,8 +91,14 @@ try {
   s = await session.captchaAct(capture.challengeId, { type: 'fill', ref: capture.inputRefs[0]!, value: 'AB12' });
   capture = await session.captchaInspect(canvasRef(s));
   await assert.rejects(session.captchaAct(capture.challengeId, { type: 'fill', ref: capture.inputRefs[0]!, value: 'C2D4' }), /budget exhausted/);
+  capture = await session.captchaInspect(ref(s, 'Press & Hold', 'region'));
+  s = await session.captchaAct(capture.challengeId, { type: 'click', point: { x: 120, y: 30 } });
+  assert.match(s.text, /hold too short/);
+  capture = await session.captchaInspect(ref(s, 'Press & Hold', 'region'));
+  s = await session.captchaAct(capture.challengeId, { type: 'hold', point: { x: 120, y: 30 }, durationMs: 1000 });
+  assert.match(s.text, /hold passed/);
   const evidence = await readEvidence(root, key, jobId, 1);
   assert.ok(evidence.filter(e => e.kind === 'captcha' && e.screenshot).length >= 8);
   assert.ok(evidence.some(e => e.kind === 'page' && e.text.includes('CK123 PVG BNE ATD')));
-  console.log('CAPTCHA browser fixtures passed: text, refreshed images, click, drag, iframe, stale tokens, input/coordinate guards, budget and signed evidence. No model or live airline was used.');
+  console.log('CAPTCHA browser fixtures passed: text, refreshed images, click, drag, hold, iframe, stale tokens, input/coordinate guards, budget and signed evidence. No model or live airline was used.');
 } finally { await session.close(); await rm(root, { recursive: true, force: true }); }

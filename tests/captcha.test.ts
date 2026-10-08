@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CaptchaBudget, assertCaptchaText, assertPoint, captchaRole, type ElementInfo } from '../src/browser/captcha.js';
+import { CaptchaBudget, assertCaptchaText, assertPoint, captchaActionSchema, captchaRole, type ElementInfo } from '../src/browser/captcha.js';
 import { validateShipment } from '../src/evidence.js';
 import { mawb, verifiedFixture } from './helpers.js';
 
@@ -23,6 +23,25 @@ test('CAPTCHA text, coordinate and per-attempt budgets fail closed', () => {
   for (let i = 0; i < 3; i++) budget.take('fill');
   assert.throws(() => budget.take('fill'), /budget exhausted/);
   budget.take('click');
+});
+test('press-and-hold controls are recognized without turning login or ordinary buttons into challenges', () => {
+  const button = { ...field, tag: 'button', type: 'button', identity: 'verify-target', context: '', label: 'Press & Hold •••' };
+  for (const label of ['Press & Hold •••', 'Press and Hold', 'Hold to verify', '长按验证', '按住按钮验证']) {
+    assert.equal(captchaRole({ ...button, label }), 'region', label);
+    assert.equal(captchaRole({ ...button, tag: 'div', label }), 'region', label);
+  }
+  assert.equal(captchaRole({ ...button, label: 'Submit CAPTCHA' }), undefined);
+  assert.equal(captchaRole({ ...button, label: 'Press & Hold', context: 'password' }), undefined);
+});
+test('hold duration and attempt budget are bounded independently of clicks and drags', () => {
+  const hold = { type: 'hold', point: { x: 10, y: 10 }, durationMs: 6000 };
+  for (const durationMs of [1000, 6000, 15000]) assert.ok(captchaActionSchema.safeParse({ ...hold, durationMs }).success);
+  for (const durationMs of [undefined, 0, 999, 15001, Infinity, NaN, 1000.5]) assert.equal(captchaActionSchema.safeParse({ ...hold, durationMs }).success, false);
+  const budget = new CaptchaBudget();
+  for (let i = 0; i < 3; i++) budget.take('hold');
+  assert.throws(() => budget.take('hold'), /budget exhausted/);
+  assert.doesNotThrow(() => budget.take('click'));
+  assert.doesNotThrow(() => budget.take('drag'));
 });
 test('challenge screenshots cannot prove actual times, completion or absence', () => {
   const f = verifiedFixture(); f.page.kind = 'captcha';

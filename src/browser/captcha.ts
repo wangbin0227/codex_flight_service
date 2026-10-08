@@ -7,17 +7,22 @@ export const captchaActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('fill'), ref: z.string(), value: z.string().min(1).max(16) }).strict(),
   z.object({ type: z.literal('click'), point }).strict(),
   z.object({ type: z.literal('drag'), from: point, to: point }).strict(),
+  z.object({ type: z.literal('hold'), point, durationMs: z.number().int().min(1000).max(15000) }).strict(),
 ]);
 export type CaptchaAction = z.infer<typeof captchaActionSchema>;
 export interface ElementInfo {
   tag: string; type: string; label: string; identity: string; context: string; autocomplete: string;
 }
+const HOLD_TEXT = String.raw`(?:press|click)\s*(?:&|and)\s*hold|hold\s+to\s+verify|长按|按住.{0,12}验证`;
+const holdPrompt = new RegExp(HOLD_TEXT, 'iu');
 export function captchaRole(info: ElementInfo): 'input' | 'region' | undefined {
   const own = `${info.identity} ${info.label}`;
   if (/password|one.?time|\botp\b|\btotp\b|sms|e-?mail|phone|mobile|短信|手机|邮箱|动态口令/i.test(`${own} ${info.type} ${info.autocomplete} ${info.context}`)) return;
+  const hold = holdPrompt.test(own);
   const marker = /captcha|geetest|yidun|turnstile|verify|verification|vcode|check.?code|验证码|图形校验|滑动验证|安全验证/i;
   if (info.tag === 'input') return ['text', 'tel', 'number', ''].includes(info.type) && marker.test(own) ? 'input' : undefined;
-  if (!['textarea', 'select', 'a', 'button'].includes(info.tag) && marker.test(`${own} ${info.context}`)) return 'region';
+  if (info.tag === 'button') return hold ? 'region' : undefined;
+  if (!['textarea', 'select', 'a'].includes(info.tag) && (hold || marker.test(`${own} ${info.context}`))) return 'region';
 }
 export function assertCaptchaText(value: string) {
   // Visual text/math answers only; never an unrestricted input channel.
@@ -29,8 +34,8 @@ export function assertPoint(p: { x: number; y: number }, width: number, height: 
   }
 }
 export class CaptchaBudget {
-  private used = { inspect: 0, fill: 0, click: 0, drag: 0 };
-  readonly limits = { inspect: 24, fill: 3, click: 12, drag: 3 };
+  private used = { inspect: 0, fill: 0, click: 0, drag: 0, hold: 0 };
+  readonly limits = { inspect: 24, fill: 3, click: 12, drag: 3, hold: 3 };
   take(kind: keyof CaptchaBudget['limits']) {
     if (this.used[kind] >= this.limits[kind]) throw new Error(`CAPTCHA ${kind} budget exhausted. Try another official entrance or report captcha_unsolved.`);
     this.used[kind]++;
@@ -89,22 +94,23 @@ export class CaptchaController {
       this.budget.take('fill');
       await input.locator.fill(action.value, { timeout: 5000 });
     } else {
-      const points = action.type === 'click' ? [action.point] : [action.from, action.to];
+      const points = action.type === 'drag' ? [action.from, action.to] : [action.point];
       for (const p of points) assertPoint(p, box.width, box.height);
       this.budget.take(action.type);
       // Actionability checks reject overlays; the actual pointer coordinates use the screenshot's
       // border-box origin rather than Locator.click's padding-box origin.
-      const start = action.type === 'click' ? action.point : action.from;
+      const start = action.type === 'drag' ? action.from : action.point;
       const border = await active.region.locator.evaluate(el => ({ x: el.clientLeft, y: el.clientTop }));
       await active.region.locator.click({ position: { x: Math.max(0, start.x - border.x), y: Math.max(0, start.y - border.y) }, trial: true, timeout: 5000 });
       const latest = await active.region.locator.boundingBox();
       if (!latest || Math.abs(latest.x - box.x) > 1 || Math.abs(latest.y - box.y) > 1) throw new Error('CAPTCHA region moved. Inspect again.');
       if (action.type === 'click') await page.mouse.click(box.x + action.point.x, box.y + action.point.y);
       else {
-        await page.mouse.move(box.x + action.from.x, box.y + action.from.y);
+        await page.mouse.move(box.x + start.x, box.y + start.y);
         await page.mouse.down();
         try {
-          for (let step = 1; step <= 20; step++) {
+          if (action.type === 'hold') await page.waitForTimeout(action.durationMs);
+          else for (let step = 1; step <= 20; step++) {
             await page.mouse.move(box.x + action.from.x + (action.to.x - action.from.x) * step / 20,
               box.y + action.from.y + (action.to.y - action.from.y) * step / 20);
             await page.waitForTimeout(15);
@@ -144,4 +150,7 @@ export function describeElementsInPage(input: Element | Element[]) {
 }
 
 export const CAPTCHA_SELECTOR = ['img', 'canvas', 'iframe', '[role=slider]', '[onclick]',
+  // Some widgets expose only text in plain div/span elements inside their frame.
+  // Playwright's text matcher chooses the smallest matching element, avoiding a full-page crop.
+  ...['div', 'span'].map(tag => `${tag}:text-matches(${JSON.stringify(HOLD_TEXT)}, "i")`),
   ...['captcha', 'verify', 'verification', 'geetest', 'yidun', 'turnstile', 'vcode'].flatMap(s => [`[id*="${s}" i]`, `[class*="${s}" i]`])].join(',');

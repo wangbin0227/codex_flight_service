@@ -267,3 +267,53 @@ test('MCP cancellation closes browser and overlapping tool calls are rejected', 
     await f.session.close(); assert.equal(f.page.isClosed(), true);
   } finally { await f.cleanup(); }
 });
+
+test('a small hold control inside an oversized challenge iframe is discoverable and actionable', async () => {
+  const challenge = 'https://challenge.example/hold';
+  const f = await fixture(`<iframe aria-label="CAPTCHA frame" style="width:1300px;height:900px" src="${challenge}"></iframe>`, 20_000, {
+    pages: { [challenge]: `<meta charset="utf-8"><div style="box-sizing:border-box;width:240px;height:70px;border:12px solid black">Press &amp; Hold •••</div>
+      <p id="result">Waiting</p><script>
+      const control=document.querySelector('div'), result=document.querySelector('#result');let down=0;
+      control.addEventListener('mousedown',()=>{down=performance.now();document.body.dataset.presses=String(Number(document.body.dataset.presses||0)+1)});
+      control.addEventListener('mouseup',()=>result.textContent=performance.now()-down>=1000?'Verification passed':'Hold too short');
+      </script>` },
+  });
+  try {
+    let s = f.opened;
+    await assert.rejects(f.session.captchaInspect(refFor(s.text, 'CAPTCHA frame')), /too large/);
+    const line = s.text.split('\n').find(l => l.includes('"label":"Press & Hold •••"'));
+    assert.ok(line, 'Missing hold control in child frame');
+    assert.match(line, /"captcha":"region"/);
+    let capture = await f.session.captchaInspect(refFor(s.text, 'Press & Hold •••'));
+    assert.equal(capture.width, 240); assert.equal(capture.height, 70);
+    await assert.rejects(f.session.captchaAct(capture.challengeId, { type: 'hold', point: { x: 241, y: 35 }, durationMs: 1000 }), /inside/);
+    const frame = f.page.frames().find(frame => frame.url() === challenge)!;
+    assert.equal(await frame.locator('body').getAttribute('data-presses'), null);
+    capture = await f.session.captchaInspect(refFor(s.text, 'Press & Hold •••'));
+    s = await f.session.captchaAct(capture.challengeId, { type: 'click', point: { x: 120, y: 35 } });
+    assert.match(s.text, /Hold too short/);
+    capture = await f.session.captchaInspect(refFor(s.text, 'Press & Hold •••'));
+    s = await f.session.captchaAct(capture.challengeId, { type: 'hold', point: { x: 120, y: 35 }, durationMs: 1000 });
+    assert.match(s.text, /Verification passed/);
+    assert.equal(await frame.locator('body').getAttribute('data-presses'), '2');
+  } finally { await f.cleanup(); }
+});
+
+test('an interrupted hold releases the mouse and consumes its challenge token', async t => {
+  const f = await fixture(`<button style="width:240px;height:60px">Press &amp; Hold</button><script>
+    document.querySelector('button').onmousedown=()=>document.body.dataset.state='pressed';
+    document.onmouseup=()=>document.body.dataset.state='released';
+    document.onmousemove=event=>document.body.dataset.buttons=String(event.buttons);
+    </script>`);
+  try {
+    const capture = await f.session.captchaInspect(refFor(f.opened.text, 'Press & Hold'));
+    const wait = t.mock.method(f.page, 'waitForTimeout', async () => { throw new Error('Interrupted fixture hold'); });
+    const action = { type: 'hold' as const, point: { x: 120, y: 30 }, durationMs: 1000 };
+    await assert.rejects(f.session.captchaAct(capture.challengeId, action), /Interrupted fixture hold/);
+    assert.equal(wait.mock.callCount(), 1);
+    assert.equal(await f.page.locator('body').getAttribute('data-state'), 'released');
+    await f.page.mouse.move(300, 100);
+    assert.equal(await f.page.locator('body').getAttribute('data-buttons'), '0');
+    await assert.rejects(f.session.captchaAct(capture.challengeId, action), /stale/);
+  } finally { await f.cleanup(); }
+});
