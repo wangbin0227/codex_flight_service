@@ -4,7 +4,7 @@ import { Store } from '../src/store.js';
 import { createApp } from '../src/api.js';
 import { Worker } from '../src/worker.js';
 import { ExecutionError } from '../src/runtime/runner.js';
-import { fixture, key, mawb, splitShipmentFixture, verifiedFixture } from './helpers.js';
+import { conflictingDepartureFixture, fixture, key, mawb, splitShipmentFixture, verifiedFixture } from './helpers.js';
 const headers = { authorization: `Bearer ${key}`, 'x-user-id': 'alice', 'idempotency-key': 'batch-request-1' };
 
 test('API to queue to worker to persisted result completes with deterministic fixture evidence', async () => {
@@ -69,6 +69,26 @@ test('pending actual times and warnings survive worker persistence and API respo
       assert.match(job.result.summary.ata.note, /待核实/u);
       assert.equal(job.result.segments[0].actualArrival.quote, quote);
       assert.equal(job.result.issues.filter((i: { code: string }) => i.code === 'time_context_unverified').length, 2);
+    }
+  } finally { await app.close(); store.close(); f.cleanup(); }
+});
+test('conflict candidates reach value-and-note clients and remain partial through persistence and API reads', async () => {
+  const f = fixture(), store = new Store(f.config), app = createApp(f.config, store);
+  try {
+    const created = await app.inject({ method: 'POST', url: '/v1/batches', headers, payload: { mawbs: [mawb] } });
+    const batch = created.json(), sample = conflictingDepartureFixture();
+    const worker = new Worker(store, { run: async () => ({ raw: sample.result, evidence: sample.evidence }) });
+    await worker.tick();
+    const detail = (await app.inject({ url: `/v1/jobs/${batch.jobs[0].id}`, headers })).json();
+    const history = (await app.inject({ url: `/v1/batches/${batch.id}`, headers })).json();
+    for (const job of [store.getJob(detail.id), detail, history.jobs[0]]) {
+      assert.equal(job.status, 'partial'); assert.equal(job.result.status, 'partial');
+      assert.equal(job.result.summary.atd.kind, 'value', 'the existing Miaoda value branch displays this candidate');
+      assert.equal(job.result.summary.atd.value, '01 Sep 2026 10:00');
+      assert.match(job.result.summary.atd.note, /候选.*冲突.*待核实/u);
+      assert.deepEqual(job.result.issues, sample.result.issues);
+      assert.deepEqual(job.result.segments, sample.result.segments);
+      assert.equal(job.result.summary.ata.value, '01 Sep 2026 15:00');
     }
   } finally { await app.close(); store.close(); f.cleanup(); }
 });

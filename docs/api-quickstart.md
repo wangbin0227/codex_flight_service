@@ -56,7 +56,7 @@ curl -sS 'https://8.209.238.96/flight/v1/batches/<batchId>' \
 | `result.issues` | 缺失、冲突或校验问题说明 |
 | `errorCode` | 执行错误代码；无执行错误时为 `null` |
 
-结果尚未生成或任务执行失败时，`result` 可为 `null`。时间对象的 `kind=value` 时显示 `value` 和非空 `note`（包括“待核实”或“仅部分记录”）；`missing`、`multiple`、`conflict` 时显示 `note`，可结合 `issues` 查看原因。`time_context_unverified` 表示时间原文已取得、航段或件数仍待核实，不能仅凭 value 非空认定完全核实。
+结果尚未生成或任务执行失败时，`result` 可为 `null`。时间对象的 `kind=value` 时显示 `value` 和非空 `note`（包括“候选时间：存在冲突，待核实”或“仅部分记录”）；`missing`、`multiple`、`conflict` 时显示 `note`，可结合 `issues` 查看原因。有原文依据的冲突候选沿用 `kind=value`，选择依据和其他冲突时间在 `issues.code=time_conflict` 中保留，相关首末结果保持 partial；不能因存在该 issue 再隐藏候选，也不能省略 note。`time_context_unverified` 表示时间原文已取得、航段或件数仍待核实，不能仅凭 value 非空认定完全核实。
 
 | 单票状态 | 含义 |
 |---|---|

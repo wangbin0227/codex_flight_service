@@ -96,7 +96,7 @@ function eventGroups(result: Shipment, segments: Segment[], field: Field, contex
 export function aggregateBoundary(result: Shipment, field: Field, contexts: Map<ActualTime, string>, evidence: Map<string, Evidence>): BoundaryResult {
   const segments = boundarySegments(result, field);
   const { groups, overlappingGroups } = eventGroups(result, segments, field, contexts, evidence);
-  const explicitConflict = result.issues.some(i => i.code === 'time_conflict' && i.field === field
+  const explicitConflict = result.issues.some(i => i.code === 'time_conflict' && (i.field === field || i.field === 'general')
     && (!i.segmentId || segments.some(s => s.id === i.segmentId)));
   for (const group of groups.filter(g => g.conflict)) {
     const key = field === 'departure' ? 'actualDeparture' : 'actualArrival';
@@ -119,14 +119,20 @@ export function aggregateBoundary(result: Shipment, field: Field, contexts: Map<
     endsAtDestination: groups.length > 0 && groups.every(g => g.airport === result.destination),
     singleWholeMovement: groups.length === 1 && Boolean(result.pieces) && groups[0]!.segments.every(s => s.pieces === result.pieces) };
   const items = groups.flatMap(g => g.time ? [{ value: g.time.value, airport: g.airport }] : []);
-  if (conflict) return { ...data, summary: { value: null, kind: 'conflict', note: '来源时间存在冲突，请查看航段详情' } };
+  // One source-supported value per movement is the model's selected candidate.
+  // Multiple conflicting values for one movement provide no preferred value:
+  // do not choose whichever record happened to appear first, earliest or latest.
+  if (conflict && (!items.length || groups.some(g => g.conflict || g.ambiguous))) {
+    return { ...data, summary: { value: null, kind: 'conflict', note: '来源时间存在冲突，尚无可汇总的候选时间；请查看航段详情' } };
+  }
   if (!items.length) return { ...data, summary: { value: null, kind: 'missing', note: '未取得可核实的实际时间' } };
   const selected = extremeTime(items, field === 'arrival');
   if (!selected || groups.some(g => g.ambiguous)) {
     return { ...data, certain: false, summary: { value: null, kind: 'multiple', note: '已取得多个实际时间，但日期格式或时区不足以确定先后；请查看批次明细' } };
   }
   const notes: string[] = [];
-  if (!certain) notes.push('待核实：航段归属或件数未确认');
+  if (conflict) notes.push('候选时间：存在冲突，待核实；选择依据及其他原始时间见详情');
+  if (groups.some(g => g.uncertain)) notes.push('待核实：航段归属或件数未确认');
   if (quantityConflict) notes.push(`${field === 'departure' ? '出发' : '到达'}批次或件数存在重叠或不一致，待核实`);
   if (new Set(items.map(t => timeKey(t.value, t.airport))).size > 1) {
     notes.push(field === 'departure' ? '多批出发，取已知最早实际出发时间'

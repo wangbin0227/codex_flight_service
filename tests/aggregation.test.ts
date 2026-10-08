@@ -91,7 +91,12 @@ test('equivalent source formats deduplicate while conflicting times for the same
     assert.equal(r.summary.ata.kind, conflict ? 'conflict' : 'value');
     assert.equal(r.status, conflict ? 'partial' : 'complete');
     assert.ok(r.segments.every(s => s.actualArrival), 'both source records remain available');
-    if (conflict) assert.ok(r.issues.some(i => i.code === 'time_conflict' && i.field === 'arrival'));
+    if (conflict) {
+      assert.ok(r.issues.some(i => i.code === 'time_conflict' && i.field === 'arrival'));
+      assert.equal(r.summary.ata.value, null, 'different source records do not identify a preferred candidate');
+      f.result.segments.reverse();
+      assert.deepEqual(validateShipment(mawb, f.result, f.evidence).summary.ata, r.summary.ata, 'record order must not select a candidate');
+    }
   }
 });
 

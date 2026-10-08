@@ -94,7 +94,8 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
         result.issues.push({ code: 'time_context_unverified', message: '已核实本票页面中的实际时间原文，但航班、航段或件数未能自动匹配；保留时间，待核实。',
           segmentId: segment.id, field, values: [time.value] });
       } else contexts.set(time, context.text);
-      if (result.issues.some(i => i.code === 'time_conflict' && i.field === field && (!i.segmentId || i.segmentId === segment.id))) segment[key] = null;
+      // A conflict qualifies a source-supported candidate; it does not erase it.
+      // Aggregation keeps the warning and prevents treating it as confirmed.
     }
   }
   const completion = authoritative(result.completionEvidenceId);

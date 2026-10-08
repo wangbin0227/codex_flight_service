@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readEvidence, signEvidence, validateShipment } from '../src/evidence.js';
 import { emptyShipment } from '../src/domain.js';
-import { evidence, fixture, mawb, verifiedFixture } from './helpers.js';
+import { conflictingDepartureFixture, evidence, fixture, mawb, verifiedFixture } from './helpers.js';
 
 test('verified actual times produce summary while preserving source format', () => {
   const f = verifiedFixture(); const result = validateShipment(mawb, f.result, f.evidence);
@@ -62,12 +62,55 @@ test('actual labels elsewhere in a quote cannot validate estimated or handling t
     assert.ok(r.issues.some(i => i.field === 'arrival' && i.code === 'unverified_time'), label);
   }
 });
-test('explicit conflict suppresses only affected leg and field', () => {
+test('an explicit conflict preserves a supported candidate with a warning and never confirms its arrival', () => {
   const f = verifiedFixture();
+  f.result.journeyComplete = false; f.result.completionEvidenceId = null; f.result.completionQuote = null;
   f.result.issues.push({ code: 'time_conflict', message: 'ATA and ARR differ', segmentId: 'leg-1', field: 'arrival', values: ['15:00', '15:04'] });
   const result = validateShipment(mawb, f.result, f.evidence);
-  assert.equal(result.summary.ata.kind, 'conflict'); assert.equal(result.summary.atd.kind, 'value');
-  assert.equal(result.segments[0]!.actualArrival, null);
+  assert.equal(result.summary.ata.kind, 'value'); assert.equal(result.summary.atd.kind, 'value');
+  assert.equal(result.summary.ata.value, '01 Sep 2026 15:00');
+  assert.match(result.summary.ata.note, /候选.*冲突.*待核实/u);
+  assert.deepEqual(result.segments, f.result.segments);
+  assert.equal(result.journeyComplete, false); assert.equal(result.status, 'partial');
+  assert.equal(result.summary.atd.note, '');
+});
+test('a model-selected departure survives conflicts, source formatting and full delivery as a partial result', () => {
+  const f = conflictingDepartureFixture();
+  const result = validateShipment(mawb, f.result, f.evidence);
+  assert.equal(result.summary.atd.value, '01 Sep 2026 10:00');
+  assert.equal(result.summary.atd.kind, 'value');
+  assert.match(result.summary.atd.note, /候选.*冲突.*待核实/u);
+  assert.equal(result.summary.ata.value, '01 Sep 2026 15:00'); assert.equal(result.summary.ata.note, '');
+  assert.equal(result.status, 'partial'); assert.equal(result.journeyComplete, true);
+  assert.deepEqual(result.segments, f.result.segments); assert.deepEqual(result.issues, f.result.issues);
+});
+test('a conflict list alone cannot supply a missing or unverified candidate', () => {
+  for (const variant of ['missing', 'fabricated', 'estimate', 'wrong-shipment', 'wrong-route']) {
+    const f = conflictingDepartureFixture(), segment = f.result.segments[0]!;
+    if (variant === 'missing') segment.actualDeparture = null;
+    if (variant === 'fabricated') segment.actualDeparture!.value = '01 Sep 2026 09:00';
+    if (variant === 'estimate') {
+      const quote = segment.actualDeparture!.quote;
+      segment.actualDeparture!.quote = quote.replace('ATD', 'ETD');
+      f.page.text = f.page.text.replace(quote, segment.actualDeparture!.quote);
+    }
+    if (variant === 'wrong-shipment') f.page.text = f.page.text.replace(mawb, '176-87654321');
+    if (variant === 'wrong-route') segment.origin = 'DMM';
+    const result = validateShipment(mawb, f.result, f.evidence);
+    assert.equal(result.segments[0]!.actualDeparture, null, variant);
+    assert.equal(result.summary.atd.value, null, variant);
+    assert.equal(result.status, 'partial', variant);
+    assert.ok(result.issues.some(i => i.code === 'time_conflict'), variant);
+  }
+});
+test('an unscoped general conflict qualifies both summaries without discarding their source values', () => {
+  const f = conflictingDepartureFixture();
+  f.result.issues[0]!.field = 'general'; f.result.issues[0]!.segmentId = null;
+  const result = validateShipment(mawb, f.result, f.evidence);
+  for (const time of [result.summary.atd, result.summary.ata]) {
+    assert.ok(time.value); assert.match(time.note, /候选.*冲突.*待核实/u);
+  }
+  assert.equal(result.status, 'partial');
 });
 test('known split arrival times remain visible as partial and road feeders never replace air arrival', () => {
   const f = verifiedFixture();

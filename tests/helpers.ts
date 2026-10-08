@@ -27,6 +27,16 @@ export function verifiedFixture() {
   return { result, evidence: [directory, page], page };
 }
 
+export function conflictingDepartureFixture() {
+  const f = verifiedFixture(), segment = f.result.segments[0]!;
+  const later = '03 Sep 2026 09:15';
+  f.page.text += `\nEK123 HKG RUH DEP ${later} 237 pieces`;
+  f.result.issues.push({ code: 'time_conflict', segmentId: segment.id, field: 'departure',
+    message: 'Candidate departure matches the flight date and arrival record; another DEP occurs two days later. The source gives no timezone, and the conflict is unresolved.',
+    values: [later, segment.actualDeparture!.value] });
+  return f;
+}
+
 // Fictional AWB with a tabular airline history: one first leg and two final batches.
 export function splitShipmentFixture(total = 45, batchOne = 44, batchTwo = 1) {
   const f = verifiedFixture();

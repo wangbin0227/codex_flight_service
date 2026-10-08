@@ -60,7 +60,7 @@ main{margin-left:228px;max-width:1700px;padding:38px 48px 72px}.topbar{display:f
   <section id="evidence">
     <div class="section-heading"><span class="section-no">04</span><div><h2>从网页原文，到可展示时间</h2><p>模型负责理解与提取；程序负责检查引用与汇总。有效 JSON 只代表格式正确，还需要通过独立的证据链。</p></div></div>
     <div class="panel"><div class="panel-head"><strong>双路输入 · 确定性校验</strong><small>证据读取与签名校验由 Runner 完成；结果语义规则在 Worker 中执行。</small></div><div class="diagram-viewport" id="diagram-evidence"></div><div class="diagram-note"><span>HMAC 用于核验本次执行的采集包，不是航司签发的数字证明；已发布证据不保留临时签名密钥。</span></div></div>
-    <div class="split"><div class="panel"><h3 class="table-title">实际时间必须满足的条件</h3><div class="panel-body"><ol class="list" style="margin-top:0"><li>对应证据来自本次 jobId / attempt，通过采集包签名与正文 SHA-256 校验。</li><li>证据类型为 <code>page</code>，来源不是 track-trace 目录，页面包含当前提单号。</li><li>连续引用 quote 确实存在于页面原文；允许统一空白和字符规范化。</li><li>quote 保留本票实际标签和原始时间；航班格式、航段或件数无法自动确认时保留时间并提示待核实，明确错票或错航段仍拒绝。</li><li>出发标签允许 ATD / DEP / Actual Departure；到达允许 ATA / ARR / Actual Arrival。中文“实际起飞／实际出发”“实际到达／实际抵达”分别映射 ATD / ATA，quote 保留中文原文。</li><li>已标记的时间冲突使相关时间留空，原始冲突值保存在 issues。</li></ol></div></div><div class="panel"><h3 class="table-title">首页 ATD / ATA 的汇总规则</h3><div class="table-wrap"><table><thead><tr><th>情况</th><th>返回形式</th></tr></thead><tbody><tr><td>唯一可核实时间</td><td><code>kind=value</code>，value 为来源时间字符串</td></tr><tr><td>分批、不同时间</td><td><code>kind=multiple</code>，value=null，显示多次出发 / 分批到达</td></tr><tr><td>来源存在冲突</td><td><code>kind=conflict</code>，value=null，详情保留原值</td></tr><tr><td>没有有效证据</td><td><code>kind=missing</code>，value=null</td></tr><tr><td>航段或件数待核实</td><td><code>kind=value</code> 保留时间，note 提示待核实，issues 记录 time_context_unverified，相关首末结果保持 partial</td></tr><tr><td>只有部分记录</td><td>保留已核实的 value，note 提醒“仅部分记录”</td></tr></tbody></table></div><div class="source">只汇总运单始发 / 最终目的地对应的空运段；公路段在详情中保留。</div></div></div>
+    <div class="split"><div class="panel"><h3 class="table-title">实际时间必须满足的条件</h3><div class="panel-body"><ol class="list" style="margin-top:0"><li>对应证据来自本次 jobId / attempt，通过采集包签名与正文 SHA-256 校验。</li><li>证据类型为 <code>page</code>，来源不是 track-trace 目录，页面包含当前提单号。</li><li>连续引用 quote 确实存在于页面原文；允许统一空白和字符规范化。</li><li>quote 保留本票实际标签和原始时间；航班格式、航段或件数无法自动确认时保留时间并提示待核实，明确错票或错航段仍拒绝。</li><li>出发标签允许 ATD / DEP / Actual Departure；到达允许 ATA / ARR / Actual Arrival。中文“实际起飞／实际出发”“实际到达／实际抵达”分别映射 ATD / ATA，quote 保留中文原文。</li><li>冲突候选通过原文校验后保留，显示候选与待核实说明；未选出候选时留空，依据和冲突原值保存在 issues。</li></ol></div></div><div class="panel"><h3 class="table-title">首页 ATD / ATA 的汇总规则</h3><div class="table-wrap"><table><thead><tr><th>情况</th><th>返回形式</th></tr></thead><tbody><tr><td>唯一可核实时间</td><td><code>kind=value</code>，value 为来源时间字符串</td></tr><tr><td>可比较的分批时间</td><td><code>kind=value</code>，首发取最早、末到取最晚；未到齐注明部分记录</td></tr><tr><td>冲突已有候选</td><td><code>kind=value</code>，保留来源时间与“候选时间：存在冲突，待核实”，状态 partial</td></tr><tr><td>冲突未能选定候选</td><td><code>kind=conflict</code>，value=null，详情保留原值</td></tr><tr><td>无法比较先后</td><td><code>kind=multiple</code>，value=null，详情保留各批次时间</td></tr><tr><td>没有有效证据</td><td><code>kind=missing</code>，value=null</td></tr><tr><td>航段或件数待核实</td><td><code>kind=value</code> 保留时间，note 提示待核实，issues 记录 time_context_unverified，相关首末结果保持 partial</td></tr><tr><td>只有部分记录</td><td>保留已核实的 value，note 提醒“仅部分记录”</td></tr></tbody></table></div><div class="source">沿公路接驳定位首末空运段；公路时间不替代 ATD / ATA，最终目的地完成情况另行核实。</div></div></div>
     <div class="callout warm"><strong>三个不可替代：</strong>navigation_attempt 不能证明实际时间；ETA / STA 不能替代 ATA；交付 DLV 只能辅助判断全程完成，不能替代 ATA。运输时间不推断年份、不转换时区。规则校验仍无法保证模型完全理解复杂表格，也不能发现模型漏报的所有冲突。</div>
   </section>
 
@@ -148,7 +148,7 @@ const info={
  capture:{title:'浏览器采集包',text:'与候选 JSON 独立的采集来源。',items:['页面原文、URL（含 SPA hash）、采集时间、kind 与序号。','正文 SHA-256；对规范化排序后的采集对象生成 HMAC。','截图按需保存；签名证明采集包一致性，不是航司数字签名。'],files:['src/browser/session.ts','src/evidence.ts']},
  integrity:{title:'采集完整性校验',text:'Runner 只加载签名、摘要和执行身份全部匹配的证据。',items:['readEvidence 忽略损坏、不完整、跨任务或跨 attempt 的采集包。','有效证据发布到持久目录后，进入结果字段校验。'],files:['src/evidence.ts','src/runtime/runner.ts']},
  format:{title:'结构与提单匹配',text:'先检查结构与当前提单，防止不同提单的结果混入。',items:['严格 Zod Schema。','mawb 必须与任务完全匹配；删除重复航段 id。','检查第一条证据是否是目录访问记录。'],files:['src/evidence.ts','src/domain.ts']},
- summary:{title:'ATD / ATA 与详情',text:'服务统一生成首页汇总，接入端直接按 kind 渲染。',items:['value：唯一核实时间；missing：没有足够证据。','multiple：多次出发 / 分批到达；conflict：来源矛盾。','详情保留 air / road / unknown 分段及 issues。','来源运输时间不转时区；系统 createdAt / checkedAt 使用 ISO 时间。'],files:['src/evidence.ts','src/domain.ts','docs/api.md']},
+ summary:{title:'ATD / ATA 与详情',text:'服务统一生成首页汇总，接入端直接按 kind 渲染。',items:['value：可展示的来源时间，必须同时展示非空 note；冲突候选仍待核实。','multiple：无法排序；conflict：冲突且未选出候选；missing：未取得有效时间。','详情保留 air / road 分段、选择依据和冲突原值。','来源运输时间不转时区；系统 createdAt / checkedAt 使用 ISO 时间。'],files:['src/evidence.ts','src/domain.ts','docs/api.md']},
  queued:{title:'queued / 排队中',text:'新任务或重试任务等待事务领取。',items:['available_at 到期且并发额度允许才可领取。','同航司前缀已有运行任务时继续等待。'],files:['src/store.ts']},
  running:{title:'running / 执行中',text:'领取时 attempt 加一，并绑定唯一执行身份和租约。',items:['每 2 秒续约，失去租约会中止查询。','最终写入须匹配有效租约、workerId 和 attempt。'],files:['src/store.ts','src/worker.ts']},
  invalid:{title:'invalid_input',text:'错误输入隔离为单票终态，不阻塞其他有效提单。',items:['3 位前缀 + 8 位号码；不验证模 7 校验位。','不启动 Codex；不支持对原任务重查。'],files:['src/domain.ts','src/store.ts']},
@@ -210,7 +210,7 @@ const steps=[
  ['模型决策与浏览器操作循环',4,5,'Codex 调用远端模型；本地 MCP 执行网页操作。先尝试 track-trace，再查询航司。'],
  ['模型响应 / 航司页面响应',5,4,'外部返回模型响应或网页内容；页面读取后，由本地 MCP 生成证据编号、正文摘要、HMAC 和可选截图。'],
  ['候选 JSON + 通过验签的证据',4,3,'Runner 返回两个独立输入，发布有效证据并清理本次临时执行目录。'],
- ['字段校验、首末空运汇总与落库',3,2,'Worker 检查同票同段、原文引用和实际标签。冲突保留说明，不能验证的时间留空。'],
+ ['字段校验、首末空运汇总与落库',3,2,'Worker 检查同票同段、原文引用和实际标签。保留经原文校验的冲突候选与说明，不能验证的时间留空。'],
  ['轮询批次 / 事件 / 详情',0,1,'接入端建议每 3 秒回读；事件以 after 游标增量获取。执行期间此步骤也可以重复。'],
  ['查询持久结果',1,2,'API 仍按当前用户隔离查询；批次 finished 只表示所有任务已终止。'],
  ['返回 ATD / ATA、分段和证据入口',1,0,'界面呈现服务端统一汇总，不重新计算另一套首末时间；partial 仍展示已有有效字段。'],
@@ -245,7 +245,7 @@ renderDiagram('diagram-evidence',1200,590,[
  node('format',340,52,260,100,'结构与提单匹配',['严格 Schema · 当前 MAWB'],'service','第一关'),
  node('capture',20,264,260,118,'浏览器采集包',['原文 / URL / 时间 / kind','HMAC + SHA-256 + 执行身份'],'data','路径 B · 独立采集'),
  node('integrity',340,264,260,118,'采集完整性验证',['匹配本次 jobId / attempt','已验证证据发布到持久目录'],'data','RUNNER · 第一关'),
- node('validator',680,155,490,130,'同票 · 同航段 · 实际时间核验',['本票原文 + 实际标签；航段或件数不明确则待核实','保留已提取时间；明确错配、显式冲突置空'],'data','WORKER · 第二关'),
+ node('validator',680,155,490,130,'同票 · 同航段 · 实际时间核验',['本票原文 + 实际标签；航段或件数不明确则待核实','保留冲突候选并提示待核实；明确错配仍拒绝'],'data','WORKER · 第二关'),
  node('summary',680,427,490,112,'首末空运汇总 + 航段详情',['value / missing / multiple / conflict','DLV 仅判断完成；公路仅保留在详情'],'data','服务端输出'),
  ],[
  edge('M280 102 H340','JSON',310,91),edge('M280 322 H340','采集包',310,310),edge('M600 102 H650 V185 H680','结构通过',647,88),edge('M600 322 H650 V252 H680','有效原文',646,349,'all',true),edge('M925 285 V427','程序生成 summary，决定 complete / partial / blocked / not_found',895,359)

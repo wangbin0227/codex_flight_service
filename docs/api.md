@@ -119,6 +119,8 @@ X-User-Id: <可信服务端识别的登录用户 ID>
 
 kind 为 `value / missing / multiple / conflict`。可比较的分批实际时间返回 `kind=value`：ATD 取首批最早出发，ATA 取已知末批最晚到达，保留被选中记录的原始表达。只有去重后的末程到达件数覆盖整票时，ATA 才表示整票到齐；否则 note 明确标注“仅部分记录”。multiple 表示已有多个时间，但日期或时区不足以确定先后，不再用于正常分批到达。航段或件数尚未确认时仍保留时间并标记待核实；多个说明用分号连接。即使 kind=value，界面也须显示非空 note，不能仅凭 value 非空判断全票完成。
 
+模型已依据官网记录选出候选、且该时间通过原文与实际标签校验时，即使存在 `time_conflict`，仍返回 `kind=value`、候选 `value` 和 `note=候选时间：存在冲突，待核实；选择依据及其他原始时间见详情`；选择依据和全部冲突值保留在 issues。涉及首末时间时结果保持 partial，候选到达不用于推定全票完成。模型未选出候选，或同一事件仍有多个不同时间且无法确定优先值时，汇总保持 `kind=conflict`、`value=null`，不从 issues.values 或记录先后顺序中自动选择。此行为沿用现有字段，kind=value 表示可展示的值，不等于已完全确认。
+
 `Segment`：
 
 ```json
@@ -154,14 +156,14 @@ quote 保留连续原文中的实际标签与原始时间；提单号、航班�
 ```json
 {
   "code":"time_conflict",
-  "message":"同航段 ATA 与 ARR 不一致，保留原始值并留空汇总。",
+  "message":"同航段 ATA 与 ARR 不一致，航班详情中的 ATA 与其他运输节点更吻合，作为候选保留，仍待核实。",
   "segmentId":"leg-1",
   "field":"arrival",
   "values":["01 Sep 2026 15:00","01 Sep 2026 15:04"]
 }
 ```
 
-field 为 departure/arrival/general；segmentId 可为 null。`time_context_unverified` 保留对应字段的时间及引用，表示尚待核实；涉及首发/末到时结果保持 partial，且待核实的到达时间不用于推定全票完成。件数和交付校验不能抹掉通过基础校验的实际时间。不要把所有 partial 都显示成“查不到”。
+field 为 departure/arrival/general；segmentId 可为 null。`time_conflict` 或 `time_context_unverified` 保留通过来源校验的候选时间及引用，表示存在冲突或尚待核实；涉及首发/末到时结果保持 partial，且这些到达时间不用于推定全票完成。general 冲突同时影响对应航段的出发和到达判断。件数和交付校验不能抹掉通过基础校验的实际时间。不要把所有 partial 都显示成“查不到”。
 
 验证码失败使用 `captcha_unsolved`（尝试未通过/预算用尽）、`captcha_unsupported`（控件无法识别或操作）、`captcha_unavailable`（图片/资源加载失败）。不需要前端回传验证码答案；后端在有上限的自动尝试后返回结果。详见 [captcha.md](captcha.md)。
 
