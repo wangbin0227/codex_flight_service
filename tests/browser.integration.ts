@@ -271,8 +271,10 @@ test('MCP cancellation closes browser and overlapping tool calls are rejected', 
 test('a small hold control inside an oversized challenge iframe is discoverable and actionable', async () => {
   const challenge = 'https://challenge.example/hold';
   const f = await fixture(`<iframe aria-label="CAPTCHA frame" style="width:1300px;height:900px" src="${challenge}"></iframe>`, 20_000, {
-    pages: { [challenge]: `<meta charset="utf-8"><div style="box-sizing:border-box;width:240px;height:70px;border:12px solid black">Press &amp; Hold •••</div>
+    pages: { [challenge]: `<meta charset="utf-8"><section><div style="box-sizing:border-box;width:240px;height:70px;border:12px solid black">Press &amp; Hold •••</div></section>
       <p id="result">Waiting</p><script>
+      const parent=document.querySelector('section'), getAttribute=parent.getAttribute.bind(parent);
+      parent.getAttribute=name=>{if(name==='src')throw new Error('Unreadable widget attribute');return getAttribute(name)};
       const control=document.querySelector('div'), result=document.querySelector('#result');let down=0;
       control.addEventListener('mousedown',()=>{down=performance.now();document.body.dataset.presses=String(Number(document.body.dataset.presses||0)+1)});
       control.addEventListener('mouseup',()=>result.textContent=performance.now()-down>=1000?'Verification passed':'Hold too short');
@@ -296,6 +298,25 @@ test('a small hold control inside an oversized challenge iframe is discoverable 
     s = await f.session.captchaAct(capture.challengeId, { type: 'hold', point: { x: 120, y: 35 }, durationMs: 1000 });
     assert.match(s.text, /Verification passed/);
     assert.equal(await frame.locator('body').getAttribute('data-presses'), '2');
+  } finally { await f.cleanup(); }
+});
+
+test('an unreadable widget does not discard frame text or shift references to other controls', async () => {
+  const f = await fixture(`<p>Shipment 176-12345678</p><button id="broken">Unreadable widget</button><input aria-label="AWB"><button id="track">Track</button><p id="result"></p><input id="secret" type="password" aria-label="Captcha">
+    <script>
+    Object.defineProperty(document.querySelector('#broken'),'tagName',{get(){return undefined}});
+    const secret=document.querySelector('#secret'), getAttribute=secret.getAttribute.bind(secret);
+    secret.getAttribute=name=>{if(name==='type')throw new Error('Unreadable type attribute');return getAttribute(name)};
+    document.querySelector('#track').onclick=()=>document.querySelector('#result').textContent='Tracked '+document.querySelector('input').value;
+    </script>`);
+  try {
+    assert.match(f.opened.text, /Shipment 176-12345678/);
+    assert.doesNotMatch(f.opened.text, /"label":"Unreadable widget"/);
+    const secret = f.opened.text.split('\n').find(line => line.includes('"label":"Captcha"'));
+    assert.ok(secret); assert.match(secret, /"type":"password"/); assert.doesNotMatch(secret, /"captcha":/);
+    const filled = await f.session.fill(refFor(f.opened.text, 'AWB'), '176-12345678');
+    const result = await f.session.click(refFor(filled.text, 'Track'));
+    assert.match(result.text, /Tracked 176-12345678/);
   } finally { await f.cleanup(); }
 });
 

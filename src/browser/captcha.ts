@@ -131,21 +131,35 @@ export async function describeElement(locator: Locator): Promise<ElementInfo> {
 // Preserve locator ordering (including shadow DOM) so returned indexes remain actionable.
 export function describeElementsInPage(input: Element | Element[]) {
   const elements = Array.isArray(input) ? input : [input];
-  return elements.slice(0, 360).map((el, index) => {
-    const attributes = (node: Element) => ['id', 'class', 'name', 'alt', 'title', 'aria-label', 'placeholder', 'src']
-      .map(a => node.getAttribute(a) ?? '').join(' ').slice(0, 1800);
-    let context = '', parent = el.parentElement;
-    for (let depth = 0; parent && depth < 3 && !['BODY', 'HTML'].includes(parent.tagName); depth++, parent = parent.parentElement) context += ` ${attributes(parent)}`;
-    const form = el.closest('form');
-    if (form?.querySelector('input[type=password],input[autocomplete=one-time-code]')) context += ' password';
-    const label = el.getAttribute('aria-label') || el.getAttribute('placeholder')
-      || (el instanceof HTMLInputElement ? [...(el.labels ?? [])].map(l => l.textContent).join(' ') : '') || el.textContent?.trim().slice(0, 140) || '';
-    const description: ElementInfo = { tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') ?? '').toLowerCase(), label: label.slice(0, 140),
-      identity: attributes(el), context, autocomplete: el.getAttribute('autocomplete') ?? '' };
-    const style = getComputedStyle(el), rect = el.getBoundingClientRect();
-    return { index, description, href: el.getAttribute('href'),
-      value: el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el.value : '',
-      visible: style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0 };
+  // Third-party widgets can expose elements/ancestors with throwing DOM accessors.
+  // Keep original locator indexes and isolate failures instead of losing the whole frame.
+  return elements.slice(0, 360).flatMap((el, index) => {
+    try {
+      const tag = el.tagName;
+      if (typeof tag !== 'string') return [];
+      const attribute = (node: Element, name: string) => {
+        try { const value = node.getAttribute(name); return typeof value === 'string' ? value : ''; }
+        catch { return ''; }
+      };
+      const attributes = (node: Element) => ['id', 'class', 'name', 'alt', 'title', 'aria-label', 'placeholder', 'src']
+        .map(a => attribute(node, a)).join(' ').slice(0, 1800);
+      let context = '', parent = el.parentElement;
+      for (let depth = 0; parent && depth < 3 && !['BODY', 'HTML'].includes(parent.tagName); depth++, parent = parent.parentElement) context += ` ${attributes(parent)}`;
+      const form = el.closest('form');
+      if (form?.querySelector('input[type=password],input[autocomplete=one-time-code]')) context += ' password';
+      const label = attribute(el, 'aria-label') || attribute(el, 'placeholder')
+        || (el instanceof HTMLInputElement ? [...(el.labels ?? [])].map(l => l.textContent).join(' ') : '') || el.textContent?.trim().slice(0, 140) || '';
+      // Input type/autocomplete determine authentication exclusions; do not default
+      // a failing read to a permissive text field.
+      const type = el instanceof HTMLInputElement ? el.type : attribute(el, 'type');
+      const autocomplete = el instanceof HTMLInputElement ? el.autocomplete : attribute(el, 'autocomplete');
+      const description: ElementInfo = { tag: tag.toLowerCase(), type: type.toLowerCase(), label: label.slice(0, 140),
+        identity: attributes(el), context, autocomplete };
+      const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+      return [{ index, description, href: attribute(el, 'href') || null,
+        value: el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el.value : '',
+        visible: style.visibility !== 'hidden' && style.visibility !== 'collapse' && rect.width > 0 && rect.height > 0 }];
+    } catch { return []; }
   });
 }
 
