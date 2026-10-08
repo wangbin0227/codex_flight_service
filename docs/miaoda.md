@@ -25,9 +25,9 @@
 - 刷新页面先读历史批次或已保存 batchId，不再次提交同一批查询。
 - `queued` 显示“排队中”，`running` 显示当前 stage。排队不计入每次执行的 600 秒；批次多票时总时间会更长。
 - 单次 HTTP 超时或前端等待到期时显示“暂未取得最新进度，后台任务继续”，保留 batchId 并允许恢复轮询；不能直接把任务改成失败或重复提交。只有用户明确点击取消才调用取消接口。
-- 第一部分：提单号、`result.summary.atd`、`result.summary.ata`。当 kind=multiple/conflict/missing 时显示 note，不填造时间。
+- 第一部分：提单号、`result.summary.atd`、`result.summary.ata`。当 kind=value 时显示 value，并同时显示非空 note（如“待核实：航段归属或件数未确认”）；当 kind=multiple/conflict/missing 时显示 note，不填造时间。
 - 第二部分：`result.segments` 的航班、路线、拆批、时间对象和 `result.issues`。
-- 对 partial 保留已有时间；显示缺失/冲突细节，不统一显示“查询失败”。
+- 对 partial 保留已有时间；显示待核实、缺失或冲突细节，不统一显示“查询失败”。`issues.code=time_context_unverified` 可按 segmentId、field 给对应时间加“待核实”标记；字段结构和现有接口保持兼容。
 - 重查按钮仅对可重试终态显示；发送后重新轮询，展示 attempt。
 - 证据链接经妙搭服务端代理，不能用 `?token=...` 暴露服务 Key；原文显示为文本，不作为 HTML 插入。
 

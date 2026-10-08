@@ -34,11 +34,31 @@ export async function readEvidence(dir: string, key: string, jobId: string, atte
   return result.sort((a, b) => a.sequence - b.sequence);
 }
 const hasMawb = (text: string, mawb: string) => new RegExp(`(?<!\\d)${mawb.slice(0, 3)}[\\s-]*${mawb.slice(4)}(?!\\d)`).test(text);
+function hasActualLabel(quote: string, time: ActualTime, field: 'departure' | 'arrival') {
+  const sourceLabel = field === 'departure' ? /实际(?:起飞|出发)/u : /实际(?:到达|抵达)/u;
+  if (!new RegExp(`\\b${time.label}\\b`, 'i').test(quote) && !sourceLabel.test(quote)) return false;
+  const value = compact(time.value);
+  if (!value) return false;
+  const markers = [...quote.matchAll(/\b(?:ATD|DEP|ATA|ARR|Actual Departure|Actual Arrival|ETD|ETA|STD|STA|RCS|RCF|DLV|NFD|(?:Estimated|Expected|Scheduled) (?:Departure|Arrival))\b|(?:实际|预计|计划)(?:起飞|出发|到达|抵达)/giu)];
+  // An actual label elsewhere in a broad quote cannot validate a value that
+  // is explicitly preceded by an estimated, scheduled or handling event label.
+  const nonActual = /^(?:ETD|ETA|STD|STA|RCS|RCF|DLV|NFD|Estimated |Expected |Scheduled |预计|计划)/iu;
+  for (let at = quote.indexOf(value); at >= 0; at = quote.indexOf(value, at + value.length)) {
+    const preceding = markers.findLast(m => m.index < at);
+    if (!preceding || !nonActual.test(preceding[0])) return true;
+  }
+  return false;
+}
 function isDirectory(url: string) { const u = new URL(url); return u.hostname.replace(/^www\./, '') === 'track-trace.com'; }
 function boundarySegments(result: Shipment, field: 'departure' | 'arrival') {
   const airport = field === 'departure' ? result.origin : result.destination;
   return result.segments.filter(s => s.transportType === 'air' && airport
     && (field === 'departure' ? s.origin === airport : s.destination === airport));
+}
+const uncertainTimeCodes = new Set(['time_context_unverified', 'segment_identity_unclear', 'record_identity_unclear']);
+function hasUncertainTime(result: Shipment, segmentId: string, field: 'departure' | 'arrival') {
+  return result.issues.some(i => uncertainTimeCodes.has(i.code) && (!i.segmentId || i.segmentId === segmentId)
+    && (i.field === 'general' || i.field === field));
 }
 function summary(result: Shipment, field: 'departure' | 'arrival'): SummaryTime {
   const segments = boundarySegments(result, field);
@@ -50,7 +70,12 @@ function summary(result: Shipment, field: 'departure' | 'arrival'): SummaryTime 
   const values = [...new Set(times.filter(t => t !== null).map(t => t.value))];
   if (values.length > 1) return { value: null, kind: 'multiple', note: field === 'departure' ? '多次出发' : '分批到达' };
   if (!values.length) return { value: null, kind: 'missing', note: '未取得可核实的实际时间' };
-  return { value: values[0]!, kind: 'value', note: times.includes(null) || (field === 'arrival' && !result.journeyComplete) ? '仅部分记录' : '' };
+  const notes: string[] = [];
+  if (segments.some(s => (field === 'departure' ? s.actualDeparture : s.actualArrival) && hasUncertainTime(result, s.id, field))) {
+    notes.push('待核实：航段归属或件数未确认');
+  }
+  if (times.includes(null) || (field === 'arrival' && !result.journeyComplete)) notes.push('仅部分记录');
+  return { value: values[0]!, kind: 'value', note: notes.join('；') };
 }
 export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[]): ValidatedShipment {
   const parsed = shipmentSchema.safeParse(raw);
@@ -82,16 +107,19 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
       if (!time) continue;
       const source = authoritative(time.evidenceId);
       const quote = compact(time.quote);
-      const sourceLabel = field === 'departure' ? /实际(?:起飞|出发)/u : /实际(?:到达|抵达)/u;
-      const labelFound = new RegExp(`\\b${time.label}\\b`, 'i').test(quote) || sourceLabel.test(quote);
       const context = source ? timeContext(mawb, source.text, quote, segment, result.pieces) : undefined;
-      const valid = context && compact(time.value).length > 0 && quote.includes(compact(time.value))
-        && (labels as readonly string[]).includes(time.label) && labelFound;
+      const valid = context && context.status !== 'mismatch' && compact(time.value).length > 0 && quote.includes(compact(time.value))
+        && (labels as readonly string[]).includes(time.label) && hasActualLabel(quote, time, field);
       if (!valid) {
         segment[key] = null;
-        result.issues.push({ code: 'unverified_time', message: '实际时间原文或标签不完整，或同页上下文无法明确确认提单及运输记录归属，已留空。',
+        result.issues.push({ code: 'unverified_time', message: context?.status === 'mismatch'
+          ? '引用记录与所填航班号或起终机场明确不符，已留空。'
+          : '缺少本票页面中的连续时间原文或实际标签，已留空。',
           segmentId: segment.id, field, values: [time.value] });
-      } else contexts.set(time, context);
+      } else if (context.status === 'uncertain') {
+        result.issues.push({ code: 'time_context_unverified', message: '已核实本票页面中的实际时间原文，但航班、航段或件数未能自动匹配；保留时间，待核实。',
+          segmentId: segment.id, field, values: [time.value] });
+      } else contexts.set(time, context.text);
       if (result.issues.some(i => i.code === 'time_conflict' && i.field === field && (!i.segmentId || i.segmentId === segment.id))) segment[key] = null;
     }
   }
@@ -107,7 +135,8 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
   if (!result.journeyComplete && result.pieces && result.destination) {
     result.journeyComplete = result.segments.some(s => s.transportType === 'air' && s.destination === result.destination
       && s.pieces === result.pieces && s.actualArrival !== null
-      && pieceCounts(contexts.get(s.actualArrival) ?? s.actualArrival.quote).includes(result.pieces!));
+      && !hasUncertainTime(result, s.id, 'arrival')
+      && pieceCounts(contexts.get(s.actualArrival) ?? '').includes(result.pieces!));
   }
   result.evidenceIds = [...new Set(result.evidenceIds.filter(id => byId.has(id)))];
   for (const s of result.segments) for (const t of [s.actualDeparture, s.actualArrival]) {
@@ -116,9 +145,8 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
   const atd = summary(result, 'departure'), ata = summary(result, 'arrival');
   if (result.segments.length) {
     const first = boundarySegments(result, 'departure'), last = boundarySegments(result, 'arrival');
-    const boundaries = [...first, ...last];
-    const uncertain = result.issues.some(i => ['segment_identity_unclear', 'record_identity_unclear'].includes(i.code)
-      && (!i.segmentId || boundaries.some(s => s.id === i.segmentId)));
+    const uncertain = first.some(s => hasUncertainTime(result, s.id, 'departure'))
+      || last.some(s => hasUncertainTime(result, s.id, 'arrival'));
     result.status = result.journeyComplete && !uncertain && first.every(s => s.actualDeparture) && last.every(s => s.actualArrival)
       && atd.kind === 'value' && ata.kind === 'value' ? 'complete' : 'partial';
   } else if (result.status === 'not_found') {

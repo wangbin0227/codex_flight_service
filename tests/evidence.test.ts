@@ -50,6 +50,18 @@ test('estimated labels and failed directory prerequisite never yield a successfu
   const valid = verifiedFixture();
   assert.equal(validateShipment(mawb, valid.result, [valid.page]).status, 'blocked');
 });
+test('actual labels elsewhere in a quote cannot validate estimated or handling times', () => {
+  for (const label of ['ETA', 'STA', 'Estimated Arrival', '预计到达', '计划抵达', 'RCF', 'DLV']) {
+    const f = verifiedFixture(), segment = f.result.segments[0]!;
+    const quote = `EK/0123 HKG RUH ATA pending ${label} 01 Sep 2026 15:00 237 pieces`;
+    segment.flightNumber = 'EK/0123';
+    segment.actualArrival!.quote = quote;
+    f.page.text += `\n${quote}`;
+    const r = validateShipment(mawb, f.result, f.evidence);
+    assert.equal(r.summary.ata.value, null, label);
+    assert.ok(r.issues.some(i => i.field === 'arrival' && i.code === 'unverified_time'), label);
+  }
+});
 test('explicit conflict suppresses only affected leg and field', () => {
   const f = verifiedFixture();
   f.result.issues.push({ code: 'time_conflict', message: 'ATA and ARR differ', segmentId: 'leg-1', field: 'arrival', values: ['15:00', '15:04'] });

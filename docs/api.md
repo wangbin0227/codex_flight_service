@@ -117,7 +117,7 @@ X-User-Id: <可信服务端识别的登录用户 ID>
 {"value":null,"kind":"multiple","note":"分批到达"}
 ```
 
-kind 为 `value / missing / multiple / conflict`。value 仅在唯一可核实的时间存在时非空。`note=仅部分记录` 表示不能把该值理解成全票完成。
+kind 为 `value / missing / multiple / conflict`。唯一时间通过本票原文及实际标签校验后，value 可以非空；航段或件数尚未确认时，`kind=value` 同时返回 `note=待核实：航段归属或件数未确认`。`仅部分记录` 表示不能把该值理解成全票完成；多个说明用分号连接。即使 kind=value，界面也须显示非空 note，不能仅凭 value 非空判断已全面核实。
 
 `Segment`：
 
@@ -145,7 +145,7 @@ kind 为 `value / missing / multiple / conflict`。value 仅在唯一可核实�
 
 中文官网原文“实际起飞／实际出发”对应 label=ATD，“实际到达／实际抵达”对应 label=ATA；quote 必须保留中文原文。校验器接受这些明确的实际标签，仍拒绝计划、预计、理货或提货时间。
 
-quote 保留连续原文中的实际标签与原始时间；提单号、航班及机场可由同一 evidenceId 的页面上下文证明。上下文归属不明确时，时间仍留空。原始批次、日期与来源关联须保留，按提单口径合并互补节点不等于独立确认同一架次。
+quote 保留连续原文中的实际标签与原始时间；提单号、航班及机场可由同一 evidenceId 的页面上下文证明。本票原文及实际标签通过校验，而航班格式、航段或件数无法自动确认时，保留时间和证据，增加 `time_context_unverified`，并在对应首发/末到汇总的 note 标记待核实。明确错票、引用不存在、时间或实际标签缺失、引用记录与所填航班/机场明确不符时，字段仍置空并记录 `unverified_time`。原始批次、日期与来源关联须保留，按提单口径合并互补节点不等于独立确认同一架次。
 
 `complete`（任务状态为 `succeeded`）表示首发 ATD、末程 ATA 有效、唯一、归属明确且全票完成已核实；中间航段时间缺失或不影响首末判断的冲突可保留在 issues，不单独导致 partial。首末结果或全票完成证据不足时仍为 partial。
 
@@ -161,7 +161,7 @@ quote 保留连续原文中的实际标签与原始时间；提单号、航班�
 }
 ```
 
-field 为 departure/arrival/general；segmentId 可为 null。不要把所有 partial 都显示成“查不到”。
+field 为 departure/arrival/general；segmentId 可为 null。`time_context_unverified` 保留对应字段的时间及引用，表示尚待核实；涉及首发/末到时结果保持 partial，且待核实的到达时间不用于推定全票完成。件数和交付校验不能抹掉通过基础校验的实际时间。不要把所有 partial 都显示成“查不到”。
 
 验证码失败使用 `captcha_unsolved`（尝试未通过/预算用尽）、`captcha_unsupported`（控件无法识别或操作）、`captcha_unavailable`（图片/资源加载失败）。不需要前端回传验证码答案；后端在有上限的自动尝试后返回结果。详见 [captcha.md](captcha.md)。
 

@@ -36,6 +36,27 @@ test('API refuses arbitrary prompts, missing identity and invalid idempotency ke
     assert.equal((await app.inject({ method: 'POST', url: '/v1/batches', headers: { authorization: headers.authorization }, payload: { mawbs: [mawb] } })).statusCode, 400);
   } finally { await app.close(); store.close(); f.cleanup(); }
 });
+test('pending actual times and warnings survive worker persistence and API responses', async () => {
+  const f = fixture(), store = new Store(f.config), app = createApp(f.config, store);
+  try {
+    const created = await app.inject({ method: 'POST', url: '/v1/batches', headers, payload: { mawbs: [mawb] } });
+    const batch = created.json(), sample = verifiedFixture(), segment = sample.result.segments[0]!;
+    const oldQuote = segment.actualDeparture!.quote, quote = oldQuote.replace('EK123', 'EK/0123');
+    sample.page.text = sample.page.text.replace(oldQuote, quote);
+    segment.flightNumber = 'EK/0123';
+    segment.actualDeparture!.quote = segment.actualArrival!.quote = quote;
+    const worker = new Worker(store, { run: async () => ({ raw: sample.result, evidence: sample.evidence }) });
+    await worker.tick();
+    for (const job of [store.getJob(batch.jobs[0].id), (await app.inject({ url: `/v1/jobs/${batch.jobs[0].id}`, headers })).json()]) {
+      assert.equal(job.status, 'partial');
+      assert.equal(job.result.summary.atd.value, '01 Sep 2026 10:00');
+      assert.equal(job.result.summary.ata.value, '01 Sep 2026 15:00');
+      assert.match(job.result.summary.ata.note, /待核实/u);
+      assert.equal(job.result.segments[0].actualArrival.quote, quote);
+      assert.equal(job.result.issues.filter((i: { code: string }) => i.code === 'time_context_unverified').length, 2);
+    }
+  } finally { await app.close(); store.close(); f.cleanup(); }
+});
 test('one transient failure retries within budget and cannot stall another airline', async () => {
   const f = fixture(), store = new Store(f.config);
   try {

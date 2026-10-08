@@ -56,13 +56,13 @@ curl -sS 'https://8.209.238.96/flight/v1/batches/<batchId>' \
 | `result.issues` | 缺失、冲突或校验问题说明 |
 | `errorCode` | 执行错误代码；无执行错误时为 `null` |
 
-结果尚未生成或任务执行失败时，`result` 可为 `null`。时间对象的 `kind=value` 时显示 `value`；`missing`、`multiple`、`conflict` 时显示 `note`，可结合 `issues` 查看原因。
+结果尚未生成或任务执行失败时，`result` 可为 `null`。时间对象的 `kind=value` 时显示 `value` 和非空 `note`（包括“待核实”或“仅部分记录”）；`missing`、`multiple`、`conflict` 时显示 `note`，可结合 `issues` 查看原因。`time_context_unverified` 表示时间原文已取得、航段或件数仍待核实，不能仅凭 value 非空认定完全核实。
 
 | 单票状态 | 含义 |
 |---|---|
 | `queued` / `running` | 排队中 / 执行中 |
 | `succeeded` | 首发 ATD、末程 ATA 及全票完成已核实 |
-| `partial` | 查询完成，部分数据缺失或存在冲突，仍可展示有效字段 |
+| `partial` | 查询完成，部分数据待核实、缺失或存在冲突，仍展示已有时间及说明 |
 | `not_found` / `blocked` | 官网无记录 / 查询受阻 |
 | `failed` / `cancelled` / `invalid_input` | 执行失败 / 已取消 / 提单号格式错误 |
 
