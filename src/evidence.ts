@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { DIRECTORY_URL, emptyShipment, shipmentSchema, type ActualTime, type Evidence, type ValidatedShipment } from './domain.js';
 import { compact, pieceCounts, shipmentScopes, timeContext } from './time-context.js';
 import { aggregateBoundary } from './aggregation.js';
+import { recoverActualTime } from './time-recovery.js';
 
 export const evidenceSchema = z.object({
   id: z.string().uuid(), jobId: z.string().uuid(), attempt: z.number().int().positive(),
@@ -77,23 +78,35 @@ export function validateShipment(mawb: string, raw: unknown, evidence: Evidence[
       ['departure', 'actualDeparture', ['ATD', 'DEP', 'Actual Departure']],
       ['arrival', 'actualArrival', ['ATA', 'ARR', 'Actual Arrival']],
     ] as const) {
-      const time = segment[key];
+      let time = segment[key];
       if (!time) continue;
       const source = authoritative(time.evidenceId);
       const quote = compact(time.quote);
-      const context = source ? timeContext(mawb, source.text, quote, segment, result.pieces) : undefined;
-      const valid = context && context.status !== 'mismatch' && compact(time.value).length > 0 && quote.includes(compact(time.value))
+      let context = source ? timeContext(mawb, source.text, quote, segment, result.pieces) : undefined;
+      let valid = context && context.status !== 'mismatch' && compact(time.value).length > 0 && quote.includes(compact(time.value))
         && (labels as readonly string[]).includes(time.label) && hasActualLabel(quote, time, field);
+      if (!valid && source && context?.status !== 'mismatch' && (labels as readonly string[]).includes(time.label)) {
+        const origin = new URL(source.url).origin;
+        const recovery = recoverActualTime(mawb, time.value, segment, field, result.pieces,
+          evidence.filter(e => authoritative(e.id) && new URL(e.url).origin === origin));
+        if (recovery) {
+          time = segment[key] = recovery.time;
+          context = recovery.context;
+          valid = true;
+          result.issues.push({ code: 'time_evidence_recovered', message: '已从本次查询的官网同票运输记录重新核实实际时间，并修正原文引用。',
+            segmentId: segment.id, field, values: [time.value] });
+        }
+      }
       if (!valid) {
         segment[key] = null;
         result.issues.push({ code: 'unverified_time', message: context?.status === 'mismatch'
           ? '引用记录与所填航班号或起终机场明确不符，已留空。'
           : '缺少本票页面中的连续时间原文或实际标签，已留空。',
           segmentId: segment.id, field, values: [time.value] });
-      } else if (context.status === 'uncertain') {
+      } else if (context!.status === 'uncertain') {
         result.issues.push({ code: 'time_context_unverified', message: '已核实本票页面中的实际时间原文，但航班、航段或件数未能自动匹配；保留时间，待核实。',
           segmentId: segment.id, field, values: [time.value] });
-      } else contexts.set(time, context.text);
+      } else contexts.set(time, context!.text);
       // A conflict qualifies a source-supported candidate; it does not erase it.
       // Aggregation keeps the warning and prevents treating it as confirmed.
     }
